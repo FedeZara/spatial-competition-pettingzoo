@@ -1,0 +1,84 @@
+[project]
+name = "spatial-competition-pettingzoo"
+version = "0.1.0"
+description = ""
+authors = [{ name = "FedeZara", email = "fedezara2001@gmail.com" }]
+readme = "README.md"
+
+[tool.poetry]
+packages = [{ include = "spatial_competition_pettingzoo" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+pettingzoo = ">=1.25.0,<2.0.0"
+numpy = ">=1.24.0,<3.0.0"
+gymnasium = "^1.2.1"
+
+[tool.poetry.group.dev.dependencies]
+ruff = ">=0.13.1,<0.14.0"
+isort = ">=6.0.1,<7.0.0"
+pytest = ">=8.4.2,<9.0.0"
+mypy = ">=1.18.2,<2.0.0"
+pre-commit = ">=3.0.0,<4.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # trailing comma missing (conflicts with formatter)
+    "COM819",  # trailing comma prohibited (conflicts with formatter)
+    "D100",    # ignore missing docs
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D200",
+    "D203",    # blank line before class docstring (conflicts with D211)
+    "D205",
+    "D212",
+    "D400",
+    "D401",
+    "D415",
+    "E402",    # false positives for local imports
+    "E501",    # line too long
+    "S101",    # assert statements in tests are fine
+    "TRY003",  # external messages in exceptions are too verbose
+    "TD002",
+    "TD003",
+    "FIX002",  # too verbose descriptions of todos
+    "PLR0913", # too many arguments in function (more than 10)
+]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+disallow_untyped_defs = true
+disallow_any_unimported = false # Allow Any from untyped imports like pettingzoo
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+show_error_codes = true
+warn_unused_ignores = true
+
+# Ignore missing imports for libraries without type stubs
+[[tool.mypy.overrides]]
+module = ["pettingzoo.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["--strict-markers", "--strict-config"]
