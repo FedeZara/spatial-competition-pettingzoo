@@ -15,6 +15,10 @@ class Seller:
         self.quality = quality
         self._last_movement_size = 0.0
 
+    @property
+    def agent_id(self) -> str:
+        return f"seller_{self.idx}"
+
     def set_price(self, new_price: float) -> None:
         self.price = new_price
 

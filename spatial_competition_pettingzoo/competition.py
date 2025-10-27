@@ -1,5 +1,6 @@
 from spatial_competition_pettingzoo.competition_space import CompetitionSpace
-from spatial_competition_pettingzoo.environment import InformationLevel, ViewScope
+from spatial_competition_pettingzoo.enums import InformationLevel, ViewScope
+from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
@@ -17,7 +18,7 @@ class Competition:
         max_step_size: float,
         information_level: InformationLevel,
         view_scope: ViewScope,
-        vision_radius: float,
+        vision_radius: int,
     ) -> None:
         self.dimensions = dimensions
         self.topology = topology
@@ -31,6 +32,17 @@ class Competition:
 
         self.information_level = information_level
         self.view_scope = view_scope
+
+        match topology:
+            case Topology.RECTANGLE:
+                assert vision_radius < space_resolution, (
+                    "Vision radius must be less than space resolution for rectangle topology"
+                )
+            case Topology.TORUS:
+                assert vision_radius < space_resolution / 2, (
+                    "Vision radius must be less than half of space resolution for torus topology"
+                )
+
         self.vision_radius = vision_radius
 
         self.max_price = max_price
@@ -57,6 +69,15 @@ class Competition:
     def compute_rewards(self) -> dict[str, float]:
         """Compute rewards for all agents."""
         return dict.fromkeys(self.space.sellers.keys(), 0.0)
+
+    def get_agent_observation(self, agent: str) -> Observation:
+        """Get observation for the specified agent."""
+        return Observation.build_from_competition_space(
+            space=self.space,
+            information_level=self.information_level,
+            vision_radius=self.vision_radius,
+            agent=agent,
+        )
 
     def _spawn_new_buyers(self) -> None:
         """Spawn buyers in the environment."""

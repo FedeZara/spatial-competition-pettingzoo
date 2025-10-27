@@ -65,6 +65,7 @@ ignore = [
     "TD003",
     "FIX002",  # too verbose descriptions of todos
     "PLR0913", # too many arguments in function (more than 10)
+    "PLR2004", # magic values are fine
 ]
 
 [tool.isort]

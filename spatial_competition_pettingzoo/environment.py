@@ -8,7 +8,6 @@ based on utility maximization.
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -17,54 +16,15 @@ from pettingzoo import AECEnv
 from pettingzoo.utils import AgentSelector, wrappers
 from scipy.stats import uniform
 
-from spatial_competition_pettingzoo.buyer import Buyer  # noqa: F401
 from spatial_competition_pettingzoo.competition import Competition
+from spatial_competition_pettingzoo.enums import InformationLevel, ViewScope
+from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
 
 if TYPE_CHECKING:
     from scipy.stats._distn_infrastructure import rv_continuous_frozen
-
-
-class InformationLevel(Enum):
-    """
-    Information modes for sellers - determines what type of information they can observe.
-
-    These modes create different levels of information asymmetry in the spatial
-    competition game, affecting strategic behavior and equilibrium outcomes.
-
-    Modes:
-        PRIVATE: Sellers only see their own position, price, and quality.
-
-        LIMITED: Sellers also see buyer valuation of their product.
-
-        COMPLETE: Sellers also see all other sellers' prices and qualities.
-    """
-
-    PRIVATE = "private"
-    LIMITED = "limited"
-    COMPLETE = "complete"
-
-
-class ViewScope(Enum):
-    """
-    View scope modes controlling the spatial range of observation.
-
-    These modes determine how much of the map sellers can see, independent
-    of what type of information they can observe.
-
-    Modes:
-        LIMITED: Sellers have restricted spatial vision (vision_radius parameter)
-                and only see information within that range. Creates local
-                information and spatial competition effects.
-
-        COMPLETE: Sellers can see the entire space. All available information
-                 (based on InformationLevel) is visible across the full spatial area.
-    """
-
-    LIMITED = "limited"
-    COMPLETE = "complete"
 
 
 def env(
@@ -80,11 +40,11 @@ def env(
     movement_cost: float = 0.1,
     quality_taste_distr: rv_continuous_frozen | None = None,
     max_step_size: float = 0.1,
-    space_resolution: float = 0.01,
+    space_resolution: int = 100,
     max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
     view_scope: ViewScope = ViewScope.COMPLETE,
-    vision_radius: float = 0.2,
+    vision_radius: int = 10,
     render_mode: str | None = None,
 ) -> wrappers.OrderEnforcingWrapper:
     """Create a new spatial competition environment."""
@@ -130,7 +90,7 @@ def raw_env(
     max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
     view_scope: ViewScope = ViewScope.COMPLETE,
-    vision_radius: float = 0.2,
+    vision_radius: int = 10,
     render_mode: str | None = None,
 ) -> SpatialCompetitionEnv:
     """Create a raw spatial competition environment."""
@@ -163,10 +123,6 @@ class SpatialCompetitionEnv(AECEnv):
     based on price, quality, distance, and personal preferences.
     """
 
-    NO_BUYER_PLACEHOLDER = -999
-    NO_SELLER_PRICE_PLACEHOLDER = -999
-    NO_SELLER_QUALITY_PLACEHOLDER = -999
-
     metadata: ClassVar[dict[str, Any]] = {
         "render_modes": ["human", "rgb_array"],
         "name": "spatial_competition_v0",
@@ -187,11 +143,11 @@ class SpatialCompetitionEnv(AECEnv):
         movement_cost: float = 0.1,
         quality_taste_distr: rv_continuous_frozen | None = None,
         max_step_size: float = 0.1,
-        space_resolution: float = 0.01,
+        space_resolution: int = 100,
         max_steps: int = 10000,
         information_level: InformationLevel = InformationLevel.COMPLETE,
         view_scope: ViewScope = ViewScope.COMPLETE,
-        vision_radius: float = 0.2,
+        vision_radius: int = 10,
         render_mode: str | None = None,
     ) -> None:
         """
@@ -213,7 +169,7 @@ class SpatialCompetitionEnv(AECEnv):
             max_steps: Maximum episode length
             information_level: Information mode controlling what sellers can observe
             view_scope: View scope controlling spatial observation range
-            vision_radius: Radius of vision for limited view modes
+            vision_radius: Radius of vision for limited view modes in number of grid cells
             render_mode: Rendering mode
 
         """
@@ -242,7 +198,9 @@ class SpatialCompetitionEnv(AECEnv):
         # Information level parameters
         self.information_level = information_level
         self.view_scope = view_scope
-        self.vision_radius = 1 if view_scope == ViewScope.COMPLETE else vision_radius
+
+        # TODO: Check its less than max vision radius for the topology
+        self.vision_radius = space_resolution if view_scope == ViewScope.COMPLETE else vision_radius
 
         # Validate parameters
         if max_valuation > max_price:
@@ -295,54 +253,17 @@ class SpatialCompetitionEnv(AECEnv):
         - If partial view mode, a layer containing an N dimensional matrix with information about sellers.
         - If complete view mode, a layer containing an N dimensional matrix with information about buyers.
         """
-        self_view_shape = (int(self.vision_radius / self.space_resolution),) * self.dimensions
-
-        own_position_space = spaces.Box(low=0, high=1, shape=(self.dimensions,), dtype=np.float32)
-        own_price_space = spaces.Box(low=0.0, high=self.max_price, dtype=np.float32)
-        own_quality_space = spaces.Box(low=0.0, high=self.max_quality, dtype=np.float32)
-
-        # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
-        grid_space = spaces.Box(low=0, high=3, shape=self_view_shape, dtype=np.int8)
-
-        # NO_BUYER_PLACEHOLDER = no buyer
-        buyers_space = spaces.Box(
-            low=self.NO_BUYER_PLACEHOLDER,
-            high=self.max_valuation + self.max_quality,
-            shape=self_view_shape,
-            dtype=np.float32,
+        observation_space = Observation.create_observation_space(
+            information_level=self.information_level,
+            dimensions=self.dimensions,
+            vision_radius=self.vision_radius,
+            space_resolution=self.space_resolution,
+            max_price=self.max_price,
+            max_quality=self.max_quality,
+            max_valuation=self.max_valuation,
         )
 
-        # NO_SELLER_PRICE_PLACEHOLDER = no seller, otherwise price in [0, max_price]
-        sellers_price_space = spaces.Box(
-            low=self.NO_SELLER_PRICE_PLACEHOLDER,
-            high=self.max_price,
-            shape=self_view_shape,
-            dtype=np.float32,
-        )
-
-        # NO_SELLER_QUALITY_PLACEHOLDER = no seller, otherwise quality in [0, max_quality]
-        sellers_quality_space = spaces.Box(
-            low=self.NO_SELLER_QUALITY_PLACEHOLDER,
-            high=self.max_quality,
-            shape=self_view_shape,
-            dtype=np.float32,
-        )
-
-        space_dict: dict[str, spaces.Space] = {
-            "own_position": own_position_space,
-            "own_price": own_price_space,
-            "own_quality": own_quality_space,
-            "grid": grid_space,
-        }
-
-        if self.information_level in (InformationLevel.LIMITED, InformationLevel.COMPLETE):
-            space_dict["buyers"] = buyers_space
-
-        if self.information_level == InformationLevel.COMPLETE:
-            space_dict["sellers_price"] = sellers_price_space
-            space_dict["sellers_quality"] = sellers_quality_space
-
-        self._observation_spaces = {agent: spaces.Dict(space_dict) for agent in self.possible_agents}
+        self._observation_spaces = dict.fromkeys(self.possible_agents, observation_space)
 
     def observation_space(self, agent: str) -> spaces.Space:
         """Get observation space for agent."""
@@ -351,10 +272,6 @@ class SpatialCompetitionEnv(AECEnv):
     def action_space(self, agent: str) -> spaces.Space:
         """Get action space for agent."""
         return self._action_spaces[agent]
-
-    def _get_grid_size(self) -> int:
-        """Get grid size based on space resolution."""
-        return int(1 / self.space_resolution)
 
     def reset(self, seed: int | None = None) -> None:
         """Reset the environment to initial state."""
@@ -366,9 +283,9 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Initialize seller states: position, price, quality
         sellers: dict[str, Seller] = {}
-        for agent in self.agents:
-            sellers[agent] = Seller(
-                idx=self.agent_name_mapping[agent],
+        for agent_id in self.agents:
+            sellers[agent_id] = Seller(
+                idx=self.agent_name_mapping[agent_id],
                 position=Position.uniform(self.rng, self.dimensions, self.space_resolution, self.topology),
                 price=self.rng.uniform(0, self.max_price),
                 quality=self.rng.uniform(0, self.max_quality),
@@ -394,7 +311,7 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Initialize observations
         self.observations: dict[str, dict[str, Any]] = {
-            agent: self._get_agent_observation(agent) for agent in self.agents
+            agent: self.competition.get_agent_observation(agent).get_observation() for agent in self.agents
         }
 
         # Initialize agent selector for turn-based play
@@ -451,9 +368,6 @@ class SpatialCompetitionEnv(AECEnv):
     def _next_agent(self) -> None:
         """Advance to the next agent in the turn order."""
         self.agent_selection = next(self._agent_selector)
-
-    def _get_agent_observation(self, agent: str) -> dict[str, np.ndarray]:  # noqa: ARG002
-        return {}
 
     def render(self) -> None:
         """Render the environment (placeholder implementation)."""
