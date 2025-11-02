@@ -47,7 +47,7 @@ class Observation:
     ) -> Observation:
         assert space.is_full_space, "Space must be the full space to build an observation"
 
-        seller = space.sellers[agent_id]
+        seller = space.sellers_dict[agent_id]
 
         seller_subspace = view_scope.build_seller_subspace(space, seller.position)
 
@@ -83,7 +83,7 @@ class Observation:
         view_scope: ViewScope,
         space_resolution: int,
         dimensions: int,
-        max_valuation: float,
+        max_price: float,
         max_quality: float,
     ) -> spaces.Box:
         """Create observation space for buyers information."""
@@ -91,7 +91,7 @@ class Observation:
 
         return spaces.Box(
             low=Observation.NO_BUYER_PLACEHOLDER,
-            high=max_valuation + max_quality,
+            high=max_price + max_quality,  # max_price + max_quality is the maximum possible value for a buyer
             shape=local_view_shape,
             dtype=np.float32,
         )
@@ -131,7 +131,6 @@ class Observation:
         space_resolution: int,
         max_price: float,
         max_quality: float,
-        max_valuation: float,
     ) -> spaces.Dict:
         """Create complete observation space based on information level."""
         # Start with basic spaces
@@ -151,7 +150,7 @@ class Observation:
                 view_scope=view_scope,
                 space_resolution=space_resolution,
                 dimensions=dimensions,
-                max_valuation=max_valuation,
+                max_price=max_price,
                 max_quality=max_quality,
             )
 
@@ -174,7 +173,7 @@ class Observation:
         # n dimensional array of zeros, where each dimension is the size of the subspace
         local_view = np.zeros(seller_subspace.relative_extent.tensor_coordinates + 1, dtype=np.int8)
 
-        for seller in seller_subspace.sellers.values():
+        for seller in seller_subspace.sellers_dict.values():
             index = tuple(seller_subspace.relative_position(seller.position).tensor_coordinates)
             if seller.agent_id != agent_id:
                 local_view[index] = 2
@@ -189,7 +188,7 @@ class Observation:
     @classmethod
     def _build_buyers_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:
         buyers = np.full(space.relative_extent.tensor_coordinates + 1, cls.NO_BUYER_PLACEHOLDER, dtype=np.float32)
-        seller = space.sellers[agent_id]
+        seller = space.sellers_dict[agent_id]
 
         for buyer in space.buyers:
             index = tuple(space.relative_position(buyer.position).tensor_coordinates)
@@ -203,7 +202,7 @@ class Observation:
             space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float32
         )
 
-        for seller in space.sellers.values():
+        for seller in space.sellers_dict.values():
             if seller.agent_id == agent_id:
                 continue
             index = tuple(space.relative_position(seller.position).tensor_coordinates)
@@ -217,7 +216,7 @@ class Observation:
             space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float32
         )
 
-        for seller in space.sellers.values():
+        for seller in space.sellers_dict.values():
             if seller.agent_id == agent_id:
                 continue
             index = tuple(space.relative_position(seller.position).tensor_coordinates)

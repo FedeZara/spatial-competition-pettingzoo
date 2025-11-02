@@ -41,6 +41,11 @@ class TestObservation:
     @pytest.fixture
     def sample_competition_space(self) -> CompetitionSpace:
         """Create a sample competition space for testing."""
+        comp_space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.TORUS,
+            space_resolution=10,
+        )
         # Create positions first
         seller1_position = Position(
             space_resolution=10,
@@ -55,8 +60,11 @@ class TestObservation:
         )
 
         # Create sellers
-        seller1 = Seller(idx=1, position=seller1_position, price=5.0, quality=0.8)
-        seller2 = Seller(idx=2, position=seller2_position, price=7.5, quality=0.9)
+        seller1 = Seller(agent_id="seller_1", position=seller1_position, price=5.0, quality=0.8)
+        seller2 = Seller(agent_id="seller_2", position=seller2_position, price=7.5, quality=0.9)
+
+        comp_space.add_seller(seller1)
+        comp_space.add_seller(seller2)
 
         # Create positions for buyers
         buyer1_position = Position(
@@ -75,13 +83,9 @@ class TestObservation:
         buyer1 = Buyer(position=buyer1_position, value=15.0, quality_taste=0.7, distance_factor=0.3)
         buyer2 = Buyer(position=buyer2_position, value=12.0, quality_taste=0.8, distance_factor=0.2)
 
-        return CompetitionSpace(
-            dimensions=2,
-            topology=Topology.TORUS,
-            space_resolution=10,
-            sellers={"seller_1": seller1, "seller_2": seller2},
-            buyers=[buyer1, buyer2],
-        )
+        comp_space.add_buyer(buyer1)
+        comp_space.add_buyer(buyer2)
+        return comp_space
 
     def test_get_observation(self, sample_position: Position, sample_arrays: dict[str, np.ndarray]) -> None:
         """Test get_observation method returns correct dictionary."""
@@ -111,13 +115,13 @@ class TestObservation:
             view_scope=LimitedViewScope(5),
             space_resolution=10,
             dimensions=2,
-            max_valuation=20.0,
+            max_price=20.0,
             max_quality=1.0,
         )
 
         assert isinstance(buyers_space, spaces.Box)
         assert np.all(buyers_space.low == Observation.NO_BUYER_PLACEHOLDER)
-        assert np.all(buyers_space.high == 21.0)  # max_valuation + max_quality
+        assert np.all(buyers_space.high == 21.0)  # max_price + max_quality
         assert buyers_space.shape == (11, 11)  # (2 * 5 + 1) for each dimension
         assert buyers_space.dtype == np.float32
 
@@ -154,7 +158,6 @@ class TestObservation:
             space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         assert isinstance(obs_space, spaces.Dict)
@@ -185,7 +188,6 @@ class TestObservation:
             space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         assert isinstance(obs_space, spaces.Dict)
@@ -206,7 +208,6 @@ class TestObservation:
             space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         assert isinstance(obs_space, spaces.Dict)
@@ -302,7 +303,6 @@ class TestObservation:
             view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         # All keys in observation should be in the observation space
@@ -332,7 +332,6 @@ class TestObservation:
             view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         # All keys in observation should be in the observation space
@@ -364,7 +363,6 @@ class TestObservation:
             view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
-            max_valuation=20.0,
         )
 
         # All keys in observation should be in the observation space

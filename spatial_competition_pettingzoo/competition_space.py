@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pettingzoo.utils.env import np
 
-from spatial_competition_pettingzoo.buyer import Buyer
 from spatial_competition_pettingzoo.position import Position
-from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
+
+if TYPE_CHECKING:
+    from spatial_competition_pettingzoo.buyer import Buyer
+    from spatial_competition_pettingzoo.distributions import (
+        MultivariateDistributionProtocol,
+    )
+    from spatial_competition_pettingzoo.seller import Seller
 
 
 class CompetitionSpace:
@@ -14,16 +21,12 @@ class CompetitionSpace:
         dimensions: int,
         topology: Topology,
         space_resolution: int,
-        sellers: dict[str, Seller],
-        buyers: list[Buyer],
         base: Position | None = None,
         extent: Position | None = None,
     ) -> None:
         self._dimensions = dimensions
         self._topology = topology
         self._space_resolution = space_resolution
-        self._sellers = sellers
-        self._buyers = buyers
         self._base = (
             base
             if base is not None
@@ -42,6 +45,9 @@ class CompetitionSpace:
                 tensor_coordinates=np.array([self._space_resolution - 1] * self._dimensions),
             )
         )
+
+        self._sellers_dict: dict[str, Seller] = {}
+        self._buyers: list[Buyer] = []
 
     @property
     def is_full_space(self) -> bool:
@@ -77,15 +83,25 @@ class CompetitionSpace:
         return self._space_resolution
 
     @property
-    def sellers(self) -> dict[str, Seller]:
-        return self._sellers
+    def sellers_dict(self) -> dict[str, Seller]:
+        return self._sellers_dict
+
+    @property
+    def sellers(self) -> list[Seller]:
+        return list(self._sellers_dict.values())
 
     @property
     def buyers(self) -> list[Buyer]:
         return self._buyers
 
-    def add_buyers(self, buyers: list[Buyer]) -> None:
-        self._buyers.extend(buyers)
+    def add_seller(self, seller: Seller) -> None:
+        self._sellers_dict[seller.agent_id] = seller
+
+    def add_buyer(self, buyer: Buyer) -> None:
+        self._buyers.append(buyer)
+
+    def remove_buyer(self, buyer: Buyer) -> None:
+        self._buyers.remove(buyer)
 
     def _is_in_interval(self, start: int, end: int, coordinate: int) -> bool:
         match self._topology:
@@ -111,6 +127,77 @@ class CompetitionSpace:
     def relative_position(self, position: Position) -> Position:
         return position - self._base
 
+    def is_position_free(self, position: Position) -> bool:
+        """
+        Check if a position is free in the competition space.
+
+        Args:
+            position: The position to check.
+
+        Returns:
+            True if the position is free, False otherwise.
+
+        """
+        assert self.is_in_subspace(position)
+
+        for buyer in self._buyers:
+            if buyer.position == position:
+                return False
+
+        for seller in self.sellers:  # noqa: SIM110
+            if seller.position == position:
+                return False
+
+        return True
+
+    @property
+    def num_cells(self) -> int:
+        """Return the total number of cells in the competition space."""
+        return int(self._space_resolution**self._dimensions)
+
+    @property
+    def num_occupied_cells(self) -> int:
+        """Return the number of occupied cells in the competition space."""
+        return len(self._buyers) + len(self._sellers_dict)
+
+    @property
+    def num_free_cells(self) -> int:
+        """Return the number of free cells in the competition space."""
+        return self.num_cells - self.num_occupied_cells
+
+    def sample_free_position(
+        self, distribution: MultivariateDistributionProtocol, rng: np.random.Generator
+    ) -> Position:
+        """
+        Sample a free position from the competition space.
+
+        Args:
+            distribution: The distribution to sample from. It should be a multivariate distribution.
+            rng: The random number generator to use.
+
+        Returns: A free position from the competition space.
+
+        """
+        assert self.num_free_cells > 0
+
+        position = None
+        while position is None:
+            sample = distribution.rvs(random_state=rng)
+
+            # Convert to tensor coordinates
+            tensor_coordinates = (sample * self._space_resolution).round().astype(np.int32)
+            tensor_coordinates = np.clip(tensor_coordinates, 0, self._space_resolution - 1)
+            position = Position(
+                space_resolution=self._space_resolution,
+                topology=self._topology,
+                tensor_coordinates=tensor_coordinates,
+            )
+
+            if not self.is_position_free(position):
+                position = None
+
+        return position
+
     def subspace(self, base: Position, extent: Position) -> CompetitionSpace:
         """Return a subspace of the competition space."""
         assert base.dimensions == self._dimensions
@@ -126,30 +213,16 @@ class CompetitionSpace:
             dimensions=self._dimensions,
             topology=self._topology,
             space_resolution=self._space_resolution,
-            sellers={},
-            buyers=[],
             base=base,
             extent=extent,
         )
 
-        for agent, seller in self._sellers.items():
+        for seller in self.sellers:
             if subspace.is_in_subspace(seller.position):
-                new_seller = Seller(
-                    idx=seller.idx,
-                    position=seller.position,
-                    price=seller.price,
-                    quality=seller.quality,
-                )
-                subspace._sellers[agent] = new_seller
+                subspace.add_seller(seller)
 
         for buyer in self._buyers:
             if subspace.is_in_subspace(buyer.position):
-                new_buyer = Buyer(
-                    position=buyer.position,
-                    value=buyer.value,
-                    quality_taste=buyer.quality_taste,
-                    distance_factor=buyer.distance_factor,
-                )
-                subspace._buyers.append(new_buyer)
+                subspace.add_buyer(buyer)
 
         return subspace

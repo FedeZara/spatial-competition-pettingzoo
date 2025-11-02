@@ -41,6 +41,12 @@ class TestLimitedViewScope:
     @pytest.fixture
     def sample_competition_space(self) -> CompetitionSpace:
         """Create a sample competition space for testing."""
+        comp_space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.RECTANGLE,
+            space_resolution=10,
+        )
+
         # Create some sellers
         seller1_position = Position(
             space_resolution=10,
@@ -53,9 +59,11 @@ class TestLimitedViewScope:
             tensor_coordinates=np.array([7, 8], dtype=np.int32),
         )
 
-        seller1 = Seller(idx=1, position=seller1_position, price=5.0, quality=0.8)
-        seller2 = Seller(idx=2, position=seller2_position, price=7.5, quality=0.9)
-        sellers = {"seller_1": seller1, "seller_2": seller2}
+        seller1 = Seller(agent_id="seller_1", position=seller1_position, price=5.0, quality=0.8)
+        seller2 = Seller(agent_id="seller_2", position=seller2_position, price=7.5, quality=0.9)
+
+        comp_space.add_seller(seller1)
+        comp_space.add_seller(seller2)
 
         # Create some buyers
         buyer1_position = Position(
@@ -71,15 +79,11 @@ class TestLimitedViewScope:
 
         buyer1 = Buyer(position=buyer1_position, value=15.0, quality_taste=0.7, distance_factor=0.3)
         buyer2 = Buyer(position=buyer2_position, value=12.0, quality_taste=0.8, distance_factor=0.2)
-        buyers = [buyer1, buyer2]
 
-        return CompetitionSpace(
-            dimensions=2,
-            topology=Topology.RECTANGLE,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        comp_space.add_buyer(buyer1)
+        comp_space.add_buyer(buyer2)
+
+        return comp_space
 
     def test_build_seller_subspace(self, sample_competition_space: CompetitionSpace) -> None:
         """Test build_seller_subspace with rectangle topology."""
@@ -109,29 +113,19 @@ class TestLimitedViewScope:
         vision_radius = 10
         view_scope = LimitedViewScope(vision_radius)
 
+        space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.RECTANGLE,
+            space_resolution=10,
+        )
+
         seller_position = Position(
             space_resolution=10,
             topology=Topology.RECTANGLE,
             tensor_coordinates=np.array([5, 5], dtype=np.int32),
         )
-        seller = Seller(idx=1, position=seller_position, price=5.0, quality=0.8)
-        sellers = {"seller_1": seller}
-
-        buyer_position = Position(
-            space_resolution=10,
-            topology=Topology.RECTANGLE,
-            tensor_coordinates=np.array([1, 1], dtype=np.int32),
-        )
-        buyer = Buyer(position=buyer_position, value=15.0, quality_taste=0.7, distance_factor=0.3)
-        buyers = [buyer]
-
-        space = CompetitionSpace(
-            dimensions=2,
-            topology=Topology.RECTANGLE,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        seller = Seller(agent_id="seller_1", position=seller_position, price=5.0, quality=0.8)
+        space.add_seller(seller)
 
         with pytest.raises(
             AssertionError, match="Vision radius must be less than space resolution for rectangle topology"
@@ -144,29 +138,19 @@ class TestLimitedViewScope:
         vision_radius = 5  # space_resolution/2 = 10/2 = 5
         view_scope = LimitedViewScope(vision_radius)
 
+        space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.TORUS,
+            space_resolution=10,
+        )
+
         seller_position = Position(
             space_resolution=10,
             topology=Topology.TORUS,
             tensor_coordinates=np.array([5, 5], dtype=np.int32),
         )
-        seller = Seller(idx=1, position=seller_position, price=5.0, quality=0.8)
-        sellers = {"seller_1": seller}
-
-        buyer_position = Position(
-            space_resolution=10,
-            topology=Topology.TORUS,
-            tensor_coordinates=np.array([1, 1], dtype=np.int32),
-        )
-        buyer = Buyer(position=buyer_position, value=15.0, quality_taste=0.7, distance_factor=0.3)
-        buyers = [buyer]
-
-        space = CompetitionSpace(
-            dimensions=2,
-            topology=Topology.TORUS,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        seller = Seller(agent_id="seller_1", position=seller_position, price=5.0, quality=0.8)
+        space.add_seller(seller)
 
         with pytest.raises(
             AssertionError, match="Vision radius must be less than half of space resolution for torus topology"
@@ -199,13 +183,18 @@ class TestCompleteViewScope:
     @pytest.fixture
     def sample_competition_space(self) -> CompetitionSpace:
         """Create a sample competition space for testing."""
+        space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.RECTANGLE,
+            space_resolution=10,
+        )
         seller_position = Position(
             space_resolution=10,
             topology=Topology.RECTANGLE,
             tensor_coordinates=np.array([3, 4], dtype=np.int32),
         )
-        seller = Seller(idx=1, position=seller_position, price=5.0, quality=0.8)
-        sellers = {"seller_1": seller}
+        seller = Seller(agent_id="seller_1", position=seller_position, price=5.0, quality=0.8)
+        space.add_seller(seller)
 
         buyer_position = Position(
             space_resolution=10,
@@ -213,15 +202,9 @@ class TestCompleteViewScope:
             tensor_coordinates=np.array([7, 8], dtype=np.int32),
         )
         buyer = Buyer(position=buyer_position, value=15.0, quality_taste=0.7, distance_factor=0.3)
-        buyers = [buyer]
+        space.add_buyer(buyer)
 
-        return CompetitionSpace(
-            dimensions=2,
-            topology=Topology.RECTANGLE,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        return space
 
     def test_build_seller_subspace(self, sample_competition_space: CompetitionSpace) -> None:
         """Test that build_seller_subspace returns the entire space."""

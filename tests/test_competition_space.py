@@ -1,10 +1,16 @@
 """Tests for the CompetitionSpace class."""
 
+from unittest.mock import MagicMock, PropertyMock, call, patch
+
 import numpy as np
 import pytest
 
 from spatial_competition_pettingzoo.buyer import Buyer
 from spatial_competition_pettingzoo.competition_space import CompetitionSpace
+from spatial_competition_pettingzoo.distributions import (
+    MultivariateNormalDistribution,
+    MultivariateUniformDistribution,
+)
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
@@ -12,6 +18,11 @@ from spatial_competition_pettingzoo.topology import Topology
 
 class TestCompetitionSpace:
     """Test class for CompetitionSpace functionality."""
+
+    @pytest.fixture
+    def mock_rng(self) -> np.random.Generator:
+        """Create mock RNG."""
+        return np.random.default_rng(42)
 
     @pytest.fixture
     def sample_sellers(self) -> dict[str, Seller]:
@@ -27,8 +38,8 @@ class TestCompetitionSpace:
             tensor_coordinates=np.array([6, 7], dtype=np.int32),
         )
 
-        seller1 = Seller(idx=1, position=seller1_position, price=5.0, quality=0.8)
-        seller2 = Seller(idx=2, position=seller2_position, price=7.5, quality=0.9)
+        seller1 = Seller(agent_id="seller_1", position=seller1_position, price=5.0, quality=0.8)
+        seller2 = Seller(agent_id="seller_2", position=seller2_position, price=7.5, quality=0.9)
 
         return {"seller_1": seller1, "seller_2": seller2}
 
@@ -56,13 +67,17 @@ class TestCompetitionSpace:
         self, sample_sellers: dict[str, Seller], sample_buyers: list[Buyer]
     ) -> CompetitionSpace:
         """Create a sample competition space for testing."""
-        return CompetitionSpace(
+        comp_space = CompetitionSpace(
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers=sample_sellers,
-            buyers=sample_buyers,
         )
+
+        for seller in sample_sellers.values():
+            comp_space.add_seller(seller)
+        for buyer in sample_buyers:
+            comp_space.add_buyer(buyer)
+        return comp_space
 
     @pytest.fixture
     def torus_competition_space(
@@ -78,7 +93,7 @@ class TestCompetitionSpace:
                 tensor_coordinates=seller.position.tensor_coordinates,
             )
             torus_seller = Seller(
-                idx=seller.idx,
+                agent_id=seller.agent_id,
                 position=torus_position,
                 price=seller.price,
                 quality=seller.quality,
@@ -100,22 +115,23 @@ class TestCompetitionSpace:
             )
             torus_buyers.append(torus_buyer)
 
-        return CompetitionSpace(
+        comp_space = CompetitionSpace(
             dimensions=2,
             topology=Topology.TORUS,
             space_resolution=10,
-            sellers=torus_sellers,
-            buyers=torus_buyers,
         )
+        for seller in torus_sellers.values():
+            comp_space.add_seller(seller)
+        for buyer in torus_buyers:
+            comp_space.add_buyer(buyer)
+        return comp_space
 
-    def test_init_default_base_extent(self, sample_sellers: dict[str, Seller], sample_buyers: list[Buyer]) -> None:
+    def test_init_default_base_extent(self) -> None:
         """Test CompetitionSpace initialization with default base and extent."""
         comp_space = CompetitionSpace(
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers=sample_sellers,
-            buyers=sample_buyers,
         )
 
         # Check default base (should be [0, 0])
@@ -126,7 +142,7 @@ class TestCompetitionSpace:
         expected_extent_coords = np.array([9, 9], dtype=np.int32)
         assert np.array_equal(comp_space.extent.tensor_coordinates, expected_extent_coords)
 
-    def test_init_custom_base_extent(self, sample_sellers: dict[str, Seller], sample_buyers: list[Buyer]) -> None:
+    def test_init_custom_base_extent(self) -> None:
         """Test CompetitionSpace initialization with custom base and extent."""
         custom_base = Position(
             space_resolution=10,
@@ -143,8 +159,6 @@ class TestCompetitionSpace:
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers=sample_sellers,
-            buyers=sample_buyers,
             base=custom_base,
             extent=custom_extent,
         )
@@ -159,7 +173,7 @@ class TestCompetitionSpace:
         assert sample_competition_space.space_resolution == 10
 
         # Test sellers property
-        sellers = sample_competition_space.sellers
+        sellers = sample_competition_space.sellers_dict
         assert len(sellers) == 2
         assert "seller_1" in sellers
         assert "seller_2" in sellers
@@ -176,8 +190,8 @@ class TestCompetitionSpace:
         expected_coords = np.array([9, 9], dtype=np.int32)
         assert np.array_equal(relative_extent.tensor_coordinates, expected_coords)
 
-    def test_add_buyers(self, sample_competition_space: CompetitionSpace) -> None:
-        """Test add_buyers method."""
+    def test_add_buyer(self, sample_competition_space: CompetitionSpace) -> None:
+        """Test add_buyer method."""
         initial_buyer_count = len(sample_competition_space.buyers)
 
         # Create new buyers
@@ -192,9 +206,8 @@ class TestCompetitionSpace:
             quality_taste=0.6,
             distance_factor=0.4,
         )
-        new_buyers = [new_buyer]
 
-        sample_competition_space.add_buyers(new_buyers)
+        sample_competition_space.add_buyer(new_buyer)
 
         assert len(sample_competition_space.buyers) == initial_buyer_count + 1
         assert sample_competition_space.buyers[-1].value == 18.0
@@ -285,8 +298,6 @@ class TestCompetitionSpace:
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers={},
-            buyers=[],
             base=custom_base,
         )
 
@@ -337,9 +348,9 @@ class TestCompetitionSpace:
         subspace = sample_competition_space.subspace(sub_base, sub_extent)
 
         # Both sellers should be included because they're in the original competition space
-        assert len(subspace.sellers) == 2
-        assert "seller_1" in subspace.sellers
-        assert "seller_2" in subspace.sellers
+        assert len(subspace.sellers_dict) == 2
+        assert "seller_1" in subspace.sellers_dict
+        assert "seller_2" in subspace.sellers_dict
 
         # Both buyers should be included because they're in the original competition space
         assert len(subspace.buyers) == 2
@@ -374,18 +385,19 @@ class TestCompetitionSpace:
             tensor_coordinates=np.array([1, 1], dtype=np.int32),  # Outside [2,2] to [6,6]
         )
 
-        inside_seller = Seller(idx=1, position=inside_position, price=5.0, quality=0.8)
-        outside_seller = Seller(idx=2, position=outside_position, price=7.0, quality=0.9)
+        inside_seller = Seller(agent_id="seller_1", position=inside_position, price=5.0, quality=0.8)
+        outside_seller = Seller(agent_id="seller_2", position=outside_position, price=7.0, quality=0.9)
 
         custom_comp_space = CompetitionSpace(
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers={"seller_1": inside_seller, "seller_2": outside_seller},
-            buyers=[],
             base=custom_base,
             extent=custom_extent,
         )
+
+        custom_comp_space.add_seller(inside_seller)
+        custom_comp_space.add_seller(outside_seller)
 
         # Create subspace with different bounds
         sub_base = Position(
@@ -402,9 +414,9 @@ class TestCompetitionSpace:
         subspace = custom_comp_space.subspace(sub_base, sub_extent)
 
         # Only the seller inside the original bounds should be copied
-        assert len(subspace.sellers) == 1
-        assert "seller_1" in subspace.sellers
-        assert "seller_2" not in subspace.sellers
+        assert len(subspace.sellers_dict) == 1
+        assert "seller_1" in subspace.sellers_dict
+        assert "seller_2" not in subspace.sellers_dict
 
     def test_subspace_invalid_bounds(self) -> None:
         """Test subspace method with invalid bounds raises assertions."""
@@ -424,8 +436,6 @@ class TestCompetitionSpace:
             dimensions=2,
             topology=Topology.RECTANGLE,
             space_resolution=10,
-            sellers={},
-            buyers=[],
             base=custom_base,
             extent=custom_extent,
         )
@@ -447,6 +457,12 @@ class TestCompetitionSpace:
 
     def test_subspace_includes_only_belonging_agents(self) -> None:
         """Test that subspace only includes sellers and buyers within the subspace bounds."""
+        competition_space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.RECTANGLE,
+            space_resolution=10,
+        )
+
         # Create sellers at different positions
         seller_inside_position = Position(
             space_resolution=10,
@@ -464,9 +480,13 @@ class TestCompetitionSpace:
             tensor_coordinates=np.array([2, 6], dtype=np.int32),
         )
 
-        seller_inside = Seller(idx=1, position=seller_inside_position, price=5.0, quality=0.8)
-        seller_outside = Seller(idx=2, position=seller_outside_position, price=6.0, quality=0.7)
-        seller_on_boundary = Seller(idx=3, position=seller_on_boundary_position, price=7.0, quality=0.9)
+        seller_inside = Seller(agent_id="seller_1", position=seller_inside_position, price=5.0, quality=0.8)
+        seller_outside = Seller(agent_id="seller_2", position=seller_outside_position, price=6.0, quality=0.7)
+        seller_on_boundary = Seller(agent_id="seller_3", position=seller_on_boundary_position, price=7.0, quality=0.9)
+
+        competition_space.add_seller(seller_inside)
+        competition_space.add_seller(seller_outside)
+        competition_space.add_seller(seller_on_boundary)
 
         # Create buyers at different positions
         buyer_inside_position = Position(
@@ -504,21 +524,9 @@ class TestCompetitionSpace:
             distance_factor=0.4,
         )
 
-        # Create competition space with all agents
-        sellers = {
-            "seller_1": seller_inside,
-            "seller_2": seller_outside,
-            "seller_3": seller_on_boundary,
-        }
-        buyers = [buyer_inside, buyer_outside, buyer_on_boundary]
-
-        competition_space = CompetitionSpace(
-            dimensions=2,
-            topology=Topology.RECTANGLE,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        competition_space.add_buyer(buyer_inside)
+        competition_space.add_buyer(buyer_outside)
+        competition_space.add_buyer(buyer_on_boundary)
 
         # Define subspace bounds that include some agents and exclude others
         # Subspace bounds: [2, 2] to [6, 6]
@@ -539,10 +547,10 @@ class TestCompetitionSpace:
         # Verify only agents within bounds are included
         # Expected: seller_inside [3,4] and seller_on_boundary [2,6] should be included
         # seller_outside [8,9] should be excluded
-        assert len(subspace.sellers) == 2
-        assert "seller_1" in subspace.sellers
-        assert "seller_3" in subspace.sellers
-        assert "seller_2" not in subspace.sellers
+        assert len(subspace.sellers_dict) == 2
+        assert "seller_1" in subspace.sellers_dict
+        assert "seller_3" in subspace.sellers_dict
+        assert "seller_2" not in subspace.sellers_dict
 
         # Expected: buyer_inside [4,5] and buyer_on_boundary [6,6] should be included
         # buyer_outside [1,1] should be excluded
@@ -570,13 +578,19 @@ class TestCompetitionSpace:
         assert not buyer_outside_coords_found, "Buyer outside subspace bounds should not be included"
 
         # Verify that the copied agents have the same properties as originals
-        assert subspace.sellers["seller_1"].price == 5.0
-        assert subspace.sellers["seller_1"].quality == 0.8
-        assert subspace.sellers["seller_3"].price == 7.0
-        assert subspace.sellers["seller_3"].quality == 0.9
+        assert subspace.sellers_dict["seller_1"].price == 5.0
+        assert subspace.sellers_dict["seller_1"].quality == 0.8
+        assert subspace.sellers_dict["seller_3"].price == 7.0
+        assert subspace.sellers_dict["seller_3"].quality == 0.9
 
     def test_subspace_torus_topology_filtering(self) -> None:
         """Test subspace filtering with torus topology for wrap-around cases."""
+        competition_space = CompetitionSpace(
+            dimensions=2,
+            topology=Topology.TORUS,
+            space_resolution=10,
+        )
+
         # Create sellers at positions that test torus wrap-around behavior
         seller_normal_position = Position(
             space_resolution=10,
@@ -589,19 +603,11 @@ class TestCompetitionSpace:
             tensor_coordinates=np.array([9, 1], dtype=np.int32),
         )
 
-        seller_normal = Seller(idx=1, position=seller_normal_position, price=5.0, quality=0.8)
-        seller_wraparound = Seller(idx=2, position=seller_wraparound_position, price=6.0, quality=0.7)
+        seller_normal = Seller(agent_id="seller_1", position=seller_normal_position, price=5.0, quality=0.8)
+        seller_wraparound = Seller(agent_id="seller_2", position=seller_wraparound_position, price=6.0, quality=0.7)
 
-        sellers = {"seller_1": seller_normal, "seller_2": seller_wraparound}
-        buyers: list[Buyer] = []
-
-        competition_space = CompetitionSpace(
-            dimensions=2,
-            topology=Topology.TORUS,
-            space_resolution=10,
-            sellers=sellers,
-            buyers=buyers,
-        )
+        competition_space.add_seller(seller_normal)
+        competition_space.add_seller(seller_wraparound)
 
         # Define subspace with bounds that wrap around: [8, 0] to [2, 3]
         # This should include [9,1] (wraparound case) and [1,2] (normal case)
@@ -619,6 +625,112 @@ class TestCompetitionSpace:
         subspace = competition_space.subspace(sub_base, sub_extent)
 
         # Both sellers should be included due to torus wrap-around logic
-        assert len(subspace.sellers) == 2
-        assert "seller_1" in subspace.sellers
-        assert "seller_2" in subspace.sellers
+        assert len(subspace.sellers_dict) == 2
+        assert "seller_1" in subspace.sellers_dict
+        assert "seller_2" in subspace.sellers_dict
+
+    def test_num_cells(self, sample_competition_space: CompetitionSpace) -> None:
+        """Test num_cells property."""
+        assert sample_competition_space.num_cells == 100
+
+    def test_num_occupied_cells(self, sample_competition_space: CompetitionSpace) -> None:
+        """Test num_occupied_cells property."""
+        assert sample_competition_space.num_occupied_cells == 4
+
+    def test_num_free_cells(self, sample_competition_space: CompetitionSpace) -> None:
+        """Test num_free_cells property."""
+        assert sample_competition_space.num_free_cells == 96
+
+    def test_sample_free_position__uniform_distribution(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        sample_free_position = sample_competition_space.sample_free_position(
+            MultivariateUniformDistribution(dim=2, loc=0.0, scale=1.0), mock_rng
+        )
+
+        assert sample_free_position.tensor_coordinates.shape == (2,)
+        assert 0 <= sample_free_position.tensor_coordinates[0] < sample_competition_space.space_resolution
+        assert 0 <= sample_free_position.tensor_coordinates[1] < sample_competition_space.space_resolution
+        assert sample_competition_space.is_position_free(sample_free_position)
+
+    def test_sample_free_position__multivariate_normal_distribution(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        mean = np.array([0.5, 0.5])
+        cov = np.array([[0.1, 0.0], [0.0, 0.1]])
+        sample_free_position = sample_competition_space.sample_free_position(
+            MultivariateNormalDistribution(mean=mean, cov=cov), mock_rng
+        )
+
+        assert sample_free_position.tensor_coordinates.shape == (2,)
+        assert 0 <= sample_free_position.tensor_coordinates[0] < sample_competition_space.space_resolution
+        assert 0 <= sample_free_position.tensor_coordinates[1] < sample_competition_space.space_resolution
+        assert sample_competition_space.is_position_free(sample_free_position)
+
+    def test_sample_free_position__mock_distribution(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        mock_pos_dist = MagicMock()
+        mock_pos_dist.rvs.side_effect = [np.array([0.5, 0.6])]
+        mock_pos_dist.dim = 2
+
+        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        assert sample_free_position.tensor_coordinates.shape == (2,)
+        assert sample_free_position.tensor_coordinates[0] == 5
+        assert sample_free_position.tensor_coordinates[1] == 6
+
+        mock_pos_dist.rvs.assert_has_calls([call(random_state=mock_rng)])
+
+    def test_sample_free_position__position_collision_handling(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        mock_pos_dist = MagicMock()
+        mock_pos_dist.rvs.side_effect = [np.array([0.3, 0.4]), np.array([0.5, 0.6])]
+        mock_pos_dist.dim = 2
+
+        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        assert sample_free_position.tensor_coordinates.shape == (2,)
+        assert sample_free_position.tensor_coordinates[0] == 5
+        assert sample_free_position.tensor_coordinates[1] == 6
+
+        mock_pos_dist.rvs.assert_has_calls([call(random_state=mock_rng), call(random_state=mock_rng)])
+
+    def test_sample_free_position__no_free_cells(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        mock_pos_dist = MagicMock()
+        mock_pos_dist.rvs.side_effect = [[0.3, 0.4], [0.5, 0.6]]
+        mock_pos_dist.dim = 2
+
+        with (
+            patch(
+                "spatial_competition_pettingzoo.competition_space.CompetitionSpace.num_free_cells",
+                new_callable=PropertyMock(return_value=0),
+            ),
+            pytest.raises(AssertionError),
+        ):
+            sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+
+    def test_sample_free_position__position_clipping(
+        self,
+        sample_competition_space: CompetitionSpace,
+        mock_rng: np.random.Generator,
+    ) -> None:
+        mock_pos_dist = MagicMock()
+        mock_pos_dist.rvs.side_effect = [np.array([-0.1, 1.2])]
+        mock_pos_dist.dim = 2
+
+        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        assert sample_free_position.tensor_coordinates.shape == (2,)
+        assert sample_free_position.tensor_coordinates[0] == 0
+        assert sample_free_position.tensor_coordinates[1] == 9

@@ -14,13 +14,15 @@ import numpy as np
 from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import AgentSelector, wrappers
-from scipy.stats import uniform
 
 from spatial_competition_pettingzoo.competition import Competition
+from spatial_competition_pettingzoo.distributions import (
+    ConstantUnivariateDistribution,
+    MultivariateUniformDistribution,
+)
 from spatial_competition_pettingzoo.enums import InformationLevel
 from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
-from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
 from spatial_competition_pettingzoo.view_scope import (
     CompleteViewScope,
@@ -29,27 +31,35 @@ from spatial_competition_pettingzoo.view_scope import (
 )
 
 if TYPE_CHECKING:
-    from scipy.stats._distn_infrastructure import rv_continuous_frozen
+    from spatial_competition_pettingzoo.distributions import (
+        DistributionProtocol,
+        MultivariateDistributionProtocol,
+    )
 
 
 def env(
     *,
     dimensions: int = 2,
     topology: Topology = Topology.RECTANGLE,
-    num_sellers: int = 3,
-    buyer_rate: float = 0.1,
-    max_price: float = 10.0,
-    max_quality: float = 5.0,
-    max_valuation: float = 10.0,
-    production_cost_factor: float = 0.5,
-    movement_cost: float = 0.1,
-    quality_taste_distr: rv_continuous_frozen | None = None,
-    max_step_size: float = 0.1,
     space_resolution: int = 100,
-    max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
     view_scope: Literal["limited", "complete"] = "complete",
     vision_radius: int = 10,
+    num_sellers: int = 3,
+    max_price: float = 10.0,
+    max_quality: float = 5.0,
+    max_step_size: float = 0.1,
+    production_cost_factor: float = 0.5,
+    movement_cost: float = 0.1,
+    seller_position_distr: MultivariateDistributionProtocol | None = None,
+    seller_price_distr: DistributionProtocol | None = None,
+    seller_quality_distr: DistributionProtocol | None = None,
+    new_buyers_per_step: int = 50,
+    buyer_position_distr: MultivariateDistributionProtocol | None = None,
+    buyer_valuation_distr: DistributionProtocol | None = None,
+    buyer_quality_taste_distr: DistributionProtocol | None = None,
+    buyer_distance_factor_distr: DistributionProtocol | None = None,
+    max_steps: int = 100,
     render_mode: str | None = None,
 ) -> wrappers.OrderEnforcingWrapper:
     """Create a new spatial competition environment."""
@@ -58,20 +68,25 @@ def env(
             raw_env(
                 dimensions=dimensions,
                 topology=topology,
-                num_sellers=num_sellers,
-                buyer_rate=buyer_rate,
-                max_price=max_price,
-                max_quality=max_quality,
-                max_valuation=max_valuation,
-                production_cost_factor=production_cost_factor,
-                movement_cost=movement_cost,
-                quality_taste_distr=quality_taste_distr,
-                max_step_size=max_step_size,
                 space_resolution=space_resolution,
-                max_steps=max_steps,
                 information_level=information_level,
                 view_scope=view_scope,
                 vision_radius=vision_radius,
+                num_sellers=num_sellers,
+                max_price=max_price,
+                max_quality=max_quality,
+                max_step_size=max_step_size,
+                production_cost_factor=production_cost_factor,
+                movement_cost=movement_cost,
+                seller_position_distr=seller_position_distr,
+                seller_price_distr=seller_price_distr,
+                seller_quality_distr=seller_quality_distr,
+                new_buyers_per_step=new_buyers_per_step,
+                buyer_position_distr=buyer_position_distr,
+                buyer_valuation_distr=buyer_valuation_distr,
+                buyer_quality_taste_distr=buyer_quality_taste_distr,
+                buyer_distance_factor_distr=buyer_distance_factor_distr,
+                max_steps=max_steps,
                 render_mode=render_mode,
             )
         )
@@ -82,40 +97,50 @@ def raw_env(
     *,
     dimensions: int = 2,
     topology: Topology = Topology.RECTANGLE,
-    num_sellers: int = 3,
-    buyer_rate: float = 0.1,
-    max_price: float = 10.0,
-    max_quality: float = 5.0,
-    max_valuation: float = 10.0,
-    production_cost_factor: float = 0.5,
-    movement_cost: float = 0.1,
-    quality_taste_distr: rv_continuous_frozen | None = None,
-    max_step_size: float = 0.1,
     space_resolution: int = 100,
-    max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
     view_scope: Literal["limited", "complete"] = "complete",
     vision_radius: int = 10,
+    num_sellers: int = 3,
+    max_price: float = 10.0,
+    max_quality: float = 5.0,
+    max_step_size: float = 0.1,
+    production_cost_factor: float = 0.5,
+    movement_cost: float = 0.1,
+    seller_position_distr: MultivariateDistributionProtocol | None = None,
+    seller_price_distr: DistributionProtocol | None = None,
+    seller_quality_distr: DistributionProtocol | None = None,
+    new_buyers_per_step: int = 50,
+    buyer_position_distr: MultivariateDistributionProtocol | None = None,
+    buyer_valuation_distr: DistributionProtocol | None = None,
+    buyer_quality_taste_distr: DistributionProtocol | None = None,
+    buyer_distance_factor_distr: DistributionProtocol | None = None,
+    max_steps: int = 100,
     render_mode: str | None = None,
 ) -> SpatialCompetitionEnv:
     """Create a raw spatial competition environment."""
     return SpatialCompetitionEnv(
         dimensions=dimensions,
         topology=topology,
-        num_sellers=num_sellers,
-        buyer_rate=buyer_rate,
-        max_price=max_price,
-        max_quality=max_quality,
-        max_valuation=max_valuation,
-        production_cost_factor=production_cost_factor,
-        movement_cost=movement_cost,
-        quality_taste_distr=quality_taste_distr,
-        max_step_size=max_step_size,
         space_resolution=space_resolution,
-        max_steps=max_steps,
         information_level=information_level,
         view_scope=view_scope,
         vision_radius=vision_radius,
+        num_sellers=num_sellers,
+        max_price=max_price,
+        max_quality=max_quality,
+        max_step_size=max_step_size,
+        production_cost_factor=production_cost_factor,
+        movement_cost=movement_cost,
+        seller_position_distr=seller_position_distr,
+        seller_price_distr=seller_price_distr,
+        seller_quality_distr=seller_quality_distr,
+        new_buyers_per_step=new_buyers_per_step,
+        buyer_position_distr=buyer_position_distr,
+        buyer_valuation_distr=buyer_valuation_distr,
+        buyer_quality_taste_distr=buyer_quality_taste_distr,
+        buyer_distance_factor_distr=buyer_distance_factor_distr,
+        max_steps=max_steps,
         render_mode=render_mode,
     )
 
@@ -139,20 +164,25 @@ class SpatialCompetitionEnv(AECEnv):
         *,
         dimensions: int = 2,
         topology: Topology = Topology.RECTANGLE,
-        num_sellers: int = 3,
-        buyer_rate: float = 0.1,
-        max_price: float = 10.0,
-        max_quality: float = 5.0,
-        max_valuation: float = 10.0,
-        production_cost_factor: float = 0.5,
-        movement_cost: float = 0.1,
-        quality_taste_distr: rv_continuous_frozen | None = None,
-        max_step_size: float = 0.1,
         space_resolution: int = 100,
-        max_steps: int = 10000,
         information_level: InformationLevel = InformationLevel.COMPLETE,
         view_scope: Literal["limited", "complete"] = "complete",
         vision_radius: int = 10,
+        num_sellers: int = 3,
+        max_price: float = 10.0,
+        max_quality: float = 5.0,
+        max_step_size: float = 0.1,
+        production_cost_factor: float = 0.5,
+        movement_cost: float = 0.1,
+        seller_position_distr: MultivariateDistributionProtocol | None = None,
+        seller_price_distr: DistributionProtocol | None = None,
+        seller_quality_distr: DistributionProtocol | None = None,
+        new_buyers_per_step: int = 50,
+        buyer_position_distr: MultivariateDistributionProtocol | None = None,
+        buyer_valuation_distr: DistributionProtocol | None = None,
+        buyer_quality_taste_distr: DistributionProtocol | None = None,
+        buyer_distance_factor_distr: DistributionProtocol | None = None,
+        max_steps: int = 10000,
         render_mode: str | None = None,
     ) -> None:
         """
@@ -161,20 +191,32 @@ class SpatialCompetitionEnv(AECEnv):
         Args:
             dimensions: Number of spatial dimensions (N)
             topology: Map topology ("rectangle" or "torus")
-            num_sellers: Number of competing sellers
-            buyer_rate: Fraction of space that spawns buyers each timestep (beta)
-            max_price: Maximum price sellers can set (P)
-            max_quality: Maximum quality level (Q)
-            max_valuation: Maximum buyer valuation (V)
-            production_cost_factor: Production cost parameter (gamma, C(q) = gamma*q^2)
-            movement_cost: Cost of moving per unit distance (m)
-            quality_taste_distr: Distribution for buyer quality taste (k_b)
-            max_step_size: Maximum movement distance per step
             space_resolution: Grid resolution for discretized continuous space
-            max_steps: Maximum episode length
             information_level: Information mode controlling what sellers can observe
             view_scope: View scope controlling spatial observation range
             vision_radius: Radius of vision for limited view modes in number of grid cells
+            num_sellers: Number of competing sellers
+            max_price: Maximum price sellers can set (P)
+            max_quality: Maximum quality level (Q)
+            max_step_size: Maximum movement distance per step
+            production_cost_factor: Production cost parameter (gamma, C(q) = gamma*q^2)
+            movement_cost: Cost of moving per unit distance (m)
+            seller_position_distr: Multivariate distribution for seller positions.
+                Defaults to multivariate uniform distribution in the unit hypercube.
+            seller_price_distr: Distribution for seller prices.
+                Defaults to constant max_price/2.
+            seller_quality_distr: Distribution for seller quality.
+                Defaults to constant max_quality/2.
+            new_buyers_per_step: Number of new buyers to spawn each environment step
+            buyer_position_distr: Multivariate distribution for buyer positions.
+                Defaults to multivariate uniform distribution in the unit hypercube.
+            buyer_valuation_distr: Distribution for buyer valuations.
+                Defaults to constant +inf.
+            buyer_quality_taste_distr: Distribution for buyer quality taste (k_b).
+                Defaults to constant 1.
+            buyer_distance_factor_distr: Distribution for buyer distance factor.
+                Defaults to constant 1.
+            max_steps: Maximum episode length
             render_mode: Rendering mode
 
         """
@@ -186,13 +228,26 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Market parameters
         self.num_sellers = num_sellers
-        self.buyer_rate = buyer_rate
         self.max_price = max_price
         self.max_quality = max_quality
-        self.max_valuation = max_valuation
         self.production_cost_factor = production_cost_factor
         self.movement_cost = movement_cost
-        self.quality_taste_distr = quality_taste_distr or uniform(0, 1)
+        self.new_buyers_per_step = new_buyers_per_step
+
+        # Seller distribution parameters
+        self.seller_position_distr = seller_position_distr or MultivariateUniformDistribution(
+            dim=dimensions, loc=0.0, scale=1 - 1 / space_resolution
+        )
+        self.seller_price_distr = seller_price_distr or ConstantUnivariateDistribution(max_price / 2)
+        self.seller_quality_distr = seller_quality_distr or ConstantUnivariateDistribution(max_quality / 2)
+
+        # Buyer distribution parameters
+        self.buyer_position_distr = buyer_position_distr or MultivariateUniformDistribution(
+            dim=dimensions, loc=0.0, scale=1 - 1 / space_resolution
+        )
+        self.buyer_valuation_distr = buyer_valuation_distr or ConstantUnivariateDistribution(np.inf)
+        self.buyer_quality_taste_distr = buyer_quality_taste_distr or ConstantUnivariateDistribution(1)
+        self.buyer_distance_factor_distr = buyer_distance_factor_distr or ConstantUnivariateDistribution(1)
         self.max_step_size = max_step_size
         self.space_resolution = space_resolution
 
@@ -217,14 +272,8 @@ class SpatialCompetitionEnv(AECEnv):
             case "complete":
                 self.view_scope = CompleteViewScope()
 
-        # Validate parameters
-        if max_valuation > max_price:
-            msg = f"max_valuation ({max_valuation}) must be <= max_price ({max_price})"
-            raise ValueError(msg)
-
         # Initialize agents
         self.possible_agents = [f"seller_{i}" for i in range(num_sellers)]
-        self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents))), strict=True))
 
         # Define action and observation spaces
         self._setup_action_space()
@@ -275,7 +324,6 @@ class SpatialCompetitionEnv(AECEnv):
             space_resolution=self.space_resolution,
             max_price=self.max_price,
             max_quality=self.max_quality,
-            max_valuation=self.max_valuation,
         )
 
         self._observation_spaces = dict.fromkeys(self.possible_agents, observation_space)
@@ -296,26 +344,27 @@ class SpatialCompetitionEnv(AECEnv):
         self.agents = self.possible_agents[:]
         self.num_steps = 0
 
-        # Initialize seller states: position, price, quality
-        sellers: dict[str, Seller] = {}
-        for agent_id in self.agents:
-            sellers[agent_id] = Seller(
-                idx=self.agent_name_mapping[agent_id],
-                position=Position.uniform(self.rng, self.dimensions, self.space_resolution, self.topology),
-                price=self.rng.uniform(0, self.max_price),
-                quality=self.rng.uniform(0, self.max_quality),
-            )
-
         self.competition = Competition(
             dimensions=self.dimensions,
             topology=self.topology,
             space_resolution=self.space_resolution,
-            sellers=sellers,
+            information_level=self.information_level,
+            view_scope=self.view_scope,
+            agent_ids=self.agents,
             max_price=self.max_price,
             max_quality=self.max_quality,
             max_step_size=self.max_step_size,
-            information_level=self.information_level,
-            view_scope=self.view_scope,
+            production_cost_factor=self.production_cost_factor,
+            movement_cost=self.movement_cost,
+            seller_position_distr=self.seller_position_distr,
+            seller_price_distr=self.seller_price_distr,
+            seller_quality_distr=self.seller_quality_distr,
+            new_buyers_per_step=self.new_buyers_per_step,
+            buyer_position_distr=self.buyer_position_distr,
+            buyer_valuation_distr=self.buyer_valuation_distr,
+            buyer_quality_taste_distr=self.buyer_quality_taste_distr,
+            buyer_distance_factor_distr=self.buyer_distance_factor_distr,
+            rng=self.rng,
         )
 
         # Initialize rewards, terminations, truncations, infos
@@ -374,7 +423,7 @@ class SpatialCompetitionEnv(AECEnv):
         # Process market interactions if all agents have acted
         if self._agent_selector.is_last():
             self.competition.env_step()
-            self.rewards = self.competition.compute_rewards()
+            self.rewards = {agent: self.competition.compute_agent_reward(agent) for agent in self.agents}
             self._agent_selector.reinit(self.rng.permutation(self.agents))
 
         self._next_agent()
