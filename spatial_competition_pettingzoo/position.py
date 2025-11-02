@@ -150,7 +150,10 @@ class Position:
             topology=self._topology,
         )
 
-    def __eq__(self, other: Position) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Position):
+            return False
+
         if (
             self.dimensions != other.dimensions
             or self.topology != other.topology
@@ -169,11 +172,13 @@ class Position:
 
         match self._topology:
             case Topology.RECTANGLE:
-                return np.linalg.norm(self.space_coordinates - other.space_coordinates)
+                return float(np.linalg.norm(self.space_coordinates - other.space_coordinates))
             case Topology.TORUS:
-                return np.linalg.norm(
-                    np.minimum(
-                        np.abs(self.space_coordinates - other.space_coordinates),
-                        1 - np.abs(self.space_coordinates - other.space_coordinates),
+                return float(
+                    np.linalg.norm(
+                        np.minimum(
+                            np.abs(self.space_coordinates - other.space_coordinates),
+                            1 - np.abs(self.space_coordinates - other.space_coordinates),
+                        )
                     )
                 )

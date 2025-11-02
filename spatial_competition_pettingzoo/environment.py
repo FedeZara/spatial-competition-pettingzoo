@@ -8,7 +8,7 @@ based on utility maximization.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from gymnasium import spaces
@@ -17,11 +17,16 @@ from pettingzoo.utils import AgentSelector, wrappers
 from scipy.stats import uniform
 
 from spatial_competition_pettingzoo.competition import Competition
-from spatial_competition_pettingzoo.enums import InformationLevel, ViewScope
+from spatial_competition_pettingzoo.enums import InformationLevel
 from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
+from spatial_competition_pettingzoo.view_scope import (
+    CompleteViewScope,
+    LimitedViewScope,
+    ViewScope,
+)
 
 if TYPE_CHECKING:
     from scipy.stats._distn_infrastructure import rv_continuous_frozen
@@ -43,7 +48,7 @@ def env(
     space_resolution: int = 100,
     max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
-    view_scope: ViewScope = ViewScope.COMPLETE,
+    view_scope: Literal["limited", "complete"] = "complete",
     vision_radius: int = 10,
     render_mode: str | None = None,
 ) -> wrappers.OrderEnforcingWrapper:
@@ -86,10 +91,10 @@ def raw_env(
     movement_cost: float = 0.1,
     quality_taste_distr: rv_continuous_frozen | None = None,
     max_step_size: float = 0.1,
-    space_resolution: float = 0.01,
+    space_resolution: int = 100,
     max_steps: int = 100,
     information_level: InformationLevel = InformationLevel.COMPLETE,
-    view_scope: ViewScope = ViewScope.COMPLETE,
+    view_scope: Literal["limited", "complete"] = "complete",
     vision_radius: int = 10,
     render_mode: str | None = None,
 ) -> SpatialCompetitionEnv:
@@ -146,7 +151,7 @@ class SpatialCompetitionEnv(AECEnv):
         space_resolution: int = 100,
         max_steps: int = 10000,
         information_level: InformationLevel = InformationLevel.COMPLETE,
-        view_scope: ViewScope = ViewScope.COMPLETE,
+        view_scope: Literal["limited", "complete"] = "complete",
         vision_radius: int = 10,
         render_mode: str | None = None,
     ) -> None:
@@ -197,10 +202,20 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Information level parameters
         self.information_level = information_level
-        self.view_scope = view_scope
-
-        # TODO: Check its less than max vision radius for the topology
-        self.vision_radius = space_resolution if view_scope == ViewScope.COMPLETE else vision_radius
+        match view_scope:
+            case "limited":
+                match topology:
+                    case Topology.RECTANGLE:
+                        if vision_radius >= space_resolution:
+                            error_msg = f"Vision radius ({vision_radius}) must be less than space resolution ({space_resolution}) for rectangle topology"
+                            raise ValueError(error_msg)
+                    case Topology.TORUS:
+                        if vision_radius >= space_resolution / 2:
+                            error_msg = f"Vision radius ({vision_radius}) must be less than half of space resolution ({space_resolution}) for torus topology"
+                            raise ValueError(error_msg)
+                self.view_scope: ViewScope = LimitedViewScope(vision_radius)
+            case "complete":
+                self.view_scope = CompleteViewScope()
 
         # Validate parameters
         if max_valuation > max_price:
@@ -255,8 +270,8 @@ class SpatialCompetitionEnv(AECEnv):
         """
         observation_space = Observation.create_observation_space(
             information_level=self.information_level,
+            view_scope=self.view_scope,
             dimensions=self.dimensions,
-            vision_radius=self.vision_radius,
             space_resolution=self.space_resolution,
             max_price=self.max_price,
             max_quality=self.max_quality,
@@ -294,14 +309,13 @@ class SpatialCompetitionEnv(AECEnv):
         self.competition = Competition(
             dimensions=self.dimensions,
             topology=self.topology,
-            sellers=sellers,
             space_resolution=self.space_resolution,
-            information_level=self.information_level,
-            view_scope=self.view_scope,
-            vision_radius=self.vision_radius,
+            sellers=sellers,
             max_price=self.max_price,
             max_quality=self.max_quality,
             max_step_size=self.max_step_size,
+            information_level=self.information_level,
+            view_scope=self.view_scope,
         )
 
         # Initialize rewards, terminations, truncations, infos
@@ -350,7 +364,7 @@ class SpatialCompetitionEnv(AECEnv):
         self.competition.agent_step(agent, movement, new_price, new_quality)
 
         # Update observations
-        self.observations[agent] = self._get_agent_observation(agent)
+        self.observations[agent] = self.competition.get_agent_observation(agent).get_observation()
 
         # Check termination conditions
         self.num_steps += 1

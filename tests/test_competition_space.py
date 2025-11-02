@@ -593,7 +593,7 @@ class TestCompetitionSpace:
         seller_wraparound = Seller(idx=2, position=seller_wraparound_position, price=6.0, quality=0.7)
 
         sellers = {"seller_1": seller_normal, "seller_2": seller_wraparound}
-        buyers = []
+        buyers: list[Buyer] = []
 
         competition_space = CompetitionSpace(
             dimensions=2,

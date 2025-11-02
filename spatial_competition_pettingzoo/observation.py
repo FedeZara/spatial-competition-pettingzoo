@@ -6,10 +6,11 @@ import numpy as np
 from gymnasium import spaces
 
 from spatial_competition_pettingzoo.enums import InformationLevel
-from spatial_competition_pettingzoo.position import Position
 
 if TYPE_CHECKING:
     from spatial_competition_pettingzoo.competition_space import CompetitionSpace
+    from spatial_competition_pettingzoo.position import Position
+    from spatial_competition_pettingzoo.view_scope import ViewScope
 
 
 class Observation:
@@ -24,9 +25,9 @@ class Observation:
         own_quality: float,
         own_position: Position,
         local_view: np.ndarray,
-        buyers: np.ndarray,
-        sellers_price: np.ndarray,
-        sellers_quality: np.ndarray,
+        buyers: np.ndarray | None,
+        sellers_price: np.ndarray | None,
+        sellers_quality: np.ndarray | None,
     ) -> None:
         self._own_price = own_price
         self._own_quality = own_quality
@@ -41,25 +42,14 @@ class Observation:
         cls,
         space: CompetitionSpace,
         information_level: InformationLevel,
-        vision_radius: int,
+        view_scope: ViewScope,
         agent_id: str,
     ) -> Observation:
         assert space.is_full_space, "Space must be the full space to build an observation"
 
         seller = space.sellers[agent_id]
 
-        vision_radius_position = Position(
-            space_resolution=space.space_resolution,
-            topology=space.topology,
-            tensor_coordinates=np.array([vision_radius] * space.dimensions),
-        )
-
-        base = seller.position - vision_radius_position
-        extent = seller.position + vision_radius_position
-
-        seller_subspace = space.subspace(base, extent)
-
-        assert seller_subspace.is_in_subspace(seller.position)
+        seller_subspace = view_scope.build_seller_subspace(space, seller.position)
 
         return cls(
             own_price=seller.price,
@@ -90,13 +80,14 @@ class Observation:
 
     @staticmethod
     def create_buyers_space(
-        vision_radius: int,
+        view_scope: ViewScope,
+        space_resolution: int,
         dimensions: int,
         max_valuation: float,
         max_quality: float,
     ) -> spaces.Box:
         """Create observation space for buyers information."""
-        local_view_shape = (2 * vision_radius + 1,) * dimensions
+        local_view_shape = view_scope.seller_view_shape(space_resolution, dimensions)
 
         return spaces.Box(
             low=Observation.NO_BUYER_PLACEHOLDER,
@@ -107,13 +98,14 @@ class Observation:
 
     @staticmethod
     def create_sellers_spaces(
-        vision_radius: int,
+        view_scope: ViewScope,
+        space_resolution: int,
         dimensions: int,
         max_price: float,
         max_quality: float,
     ) -> tuple[spaces.Box, spaces.Box]:
         """Create observation spaces for sellers price and quality information."""
-        local_view_shape = (2 * vision_radius + 1,) * dimensions
+        local_view_shape = view_scope.seller_view_shape(space_resolution, dimensions)
 
         sellers_price_space = spaces.Box(
             low=Observation.NO_SELLER_PRICE_PLACEHOLDER,
@@ -134,17 +126,18 @@ class Observation:
     @staticmethod
     def create_observation_space(
         information_level: InformationLevel,
+        view_scope: ViewScope,
         dimensions: int,
-        vision_radius: int,
+        space_resolution: int,
         max_price: float,
         max_quality: float,
         max_valuation: float,
     ) -> spaces.Dict:
         """Create complete observation space based on information level."""
         # Start with basic spaces
-        local_view_shape = (2 * vision_radius + 1,) * dimensions
+        local_view_shape = view_scope.seller_view_shape(space_resolution, dimensions)
 
-        space_dict = {
+        space_dict: dict[str, spaces.Space] = {
             "own_position": spaces.Box(low=0, high=1, shape=(dimensions,), dtype=np.float32),
             "own_price": spaces.Box(low=0.0, high=max_price, dtype=np.float32),
             "own_quality": spaces.Box(low=0.0, high=max_quality, dtype=np.float32),
@@ -155,7 +148,8 @@ class Observation:
         # Add buyers space for LIMITED and COMPLETE information levels
         if information_level in (InformationLevel.LIMITED, InformationLevel.COMPLETE):
             space_dict["buyers"] = Observation.create_buyers_space(
-                vision_radius=vision_radius,
+                view_scope=view_scope,
+                space_resolution=space_resolution,
                 dimensions=dimensions,
                 max_valuation=max_valuation,
                 max_quality=max_quality,
@@ -164,7 +158,8 @@ class Observation:
         # Add sellers spaces for COMPLETE information level
         if information_level == InformationLevel.COMPLETE:
             sellers_price_space, sellers_quality_space = Observation.create_sellers_spaces(
-                vision_radius=vision_radius,
+                view_scope=view_scope,
+                space_resolution=space_resolution,
                 dimensions=dimensions,
                 max_price=max_price,
                 max_quality=max_quality,

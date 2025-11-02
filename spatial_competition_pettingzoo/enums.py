@@ -21,23 +21,3 @@ class InformationLevel(Enum):
     PRIVATE = "private"
     LIMITED = "limited"
     COMPLETE = "complete"
-
-
-class ViewScope(Enum):
-    """
-    View scope modes controlling the spatial range of observation.
-
-    These modes determine how much of the map sellers can see, independent
-    of what type of information they can observe.
-
-    Modes:
-        LIMITED: Sellers have restricted spatial vision (vision_radius parameter)
-                and only see information within that range. Creates local
-                information and spatial competition effects.
-
-        COMPLETE: Sellers can see the entire space. All available information
-                 (based on InformationLevel) is visible across the full spatial area.
-    """
-
-    LIMITED = "limited"
-    COMPLETE = "complete"

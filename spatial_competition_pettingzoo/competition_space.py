@@ -45,8 +45,11 @@ class CompetitionSpace:
 
     @property
     def is_full_space(self) -> bool:
-        return np.array_equal(self._base.tensor_coordinates, np.array([0] * self._dimensions)) and np.array_equal(
-            self._extent.tensor_coordinates, np.array([self._space_resolution - 1] * self._dimensions)
+        return bool(
+            np.array_equal(self._base.tensor_coordinates, np.array([0] * self._dimensions))
+            and np.array_equal(
+                self._extent.tensor_coordinates, np.array([self._space_resolution - 1] * self._dimensions)
+            )
         )
 
     @property

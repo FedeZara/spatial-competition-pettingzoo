@@ -13,6 +13,7 @@ from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.topology import Topology
+from spatial_competition_pettingzoo.view_scope import LimitedViewScope
 
 
 class TestObservation:
@@ -107,7 +108,8 @@ class TestObservation:
     def test_create_buyers_space(self) -> None:
         """Test create_buyers_space static method."""
         buyers_space = Observation.create_buyers_space(
-            vision_radius=5,
+            view_scope=LimitedViewScope(5),
+            space_resolution=10,
             dimensions=2,
             max_valuation=20.0,
             max_quality=1.0,
@@ -122,7 +124,8 @@ class TestObservation:
     def test_create_sellers_spaces(self) -> None:
         """Test create_sellers_spaces static method."""
         price_space, quality_space = Observation.create_sellers_spaces(
-            vision_radius=3,
+            view_scope=LimitedViewScope(3),
+            space_resolution=10,
             dimensions=2,
             max_price=10.0,
             max_quality=1.0,
@@ -146,8 +149,9 @@ class TestObservation:
         """Test create_observation_space with PRIVATE information level."""
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.PRIVATE,
+            view_scope=LimitedViewScope(4),
             dimensions=2,
-            vision_radius=4,
+            space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
@@ -163,6 +167,10 @@ class TestObservation:
         assert "sellers_quality" not in obs_space.spaces
 
         # Check individual spaces
+        assert isinstance(obs_space.spaces["own_position"], spaces.Box)
+        assert isinstance(obs_space.spaces["own_price"], spaces.Box)
+        assert isinstance(obs_space.spaces["own_quality"], spaces.Box)
+        assert isinstance(obs_space.spaces["local_view"], spaces.Box)
         assert obs_space.spaces["own_position"].shape == (2,)
         assert obs_space.spaces["own_price"].high.item() == 10.0
         assert obs_space.spaces["own_quality"].high.item() == 1.0
@@ -172,8 +180,9 @@ class TestObservation:
         """Test create_observation_space with LIMITED information level."""
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.LIMITED,
+            view_scope=LimitedViewScope(4),
             dimensions=2,
-            vision_radius=4,
+            space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
@@ -192,8 +201,9 @@ class TestObservation:
         """Test create_observation_space with COMPLETE information level."""
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.COMPLETE,
+            view_scope=LimitedViewScope(4),
             dimensions=2,
-            vision_radius=4,
+            space_resolution=10,
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
@@ -210,10 +220,8 @@ class TestObservation:
 
     def test_local_view_observation(self, sample_competition_space: CompetitionSpace) -> None:
         """Test local view observation."""
-        vision_radius = 2
-
         observation = Observation.build_from_competition_space(
-            sample_competition_space, InformationLevel.COMPLETE, vision_radius, "seller_1"
+            sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(2), "seller_1"
         )
 
         # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
@@ -232,11 +240,9 @@ class TestObservation:
 
     def test_buyers_observation(self, sample_competition_space: CompetitionSpace) -> None:
         """Test buyers observation."""
-        vision_radius = 2
-
         with patch("spatial_competition_pettingzoo.buyer.Buyer.value_for_seller", return_value=15.0):
             observation = Observation.build_from_competition_space(
-                sample_competition_space, InformationLevel.COMPLETE, vision_radius, "seller_1"
+                sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(2), "seller_1"
             )
 
         # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
@@ -249,10 +255,8 @@ class TestObservation:
 
     def test_sellers_price_observation(self, sample_competition_space: CompetitionSpace) -> None:
         """Test sellers price observation."""
-        vision_radius = 4
-
         observation = Observation.build_from_competition_space(
-            sample_competition_space, InformationLevel.COMPLETE, vision_radius, "seller_1"
+            sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(4), "seller_1"
         )
 
         expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float32)
@@ -263,9 +267,8 @@ class TestObservation:
 
     def test_sellers_quality_observation(self, sample_competition_space: CompetitionSpace) -> None:
         """Test sellers quality observation."""
-        vision_radius = 4
         observation = Observation.build_from_competition_space(
-            sample_competition_space, InformationLevel.COMPLETE, vision_radius, "seller_2"
+            sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(4), "seller_2"
         )
 
         expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float32)
@@ -295,7 +298,8 @@ class TestObservation:
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.COMPLETE,
             dimensions=2,
-            vision_radius=1,
+            space_resolution=10,
+            view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
@@ -324,7 +328,8 @@ class TestObservation:
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.LIMITED,
             dimensions=2,
-            vision_radius=1,
+            space_resolution=10,
+            view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
@@ -355,7 +360,8 @@ class TestObservation:
         obs_space = Observation.create_observation_space(
             information_level=InformationLevel.PRIVATE,
             dimensions=2,
-            vision_radius=1,
+            space_resolution=10,
+            view_scope=LimitedViewScope(1),
             max_price=10.0,
             max_quality=1.0,
             max_valuation=20.0,
