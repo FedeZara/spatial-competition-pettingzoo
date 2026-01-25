@@ -47,8 +47,9 @@ def env(
     vision_radius: int = 10,
     num_sellers: int = 3,
     max_price: float = 10.0,
-    max_quality: float = 5.0,
     max_step_size: float = 0.1,
+    include_quality: bool = False,
+    max_quality: float = 5.0,
     production_cost_factor: float = 0.5,
     movement_cost: float = 0.1,
     seller_position_distr: MultivariateDistributionProtocol | None = None,
@@ -59,7 +60,7 @@ def env(
     buyer_valuation_distr: DistributionProtocol | None = None,
     buyer_quality_taste_distr: DistributionProtocol | None = None,
     buyer_distance_factor_distr: DistributionProtocol | None = None,
-    max_steps: int = 100,
+    max_env_steps: int = 100,
     render_mode: str | None = None,
 ) -> wrappers.OrderEnforcingWrapper:
     """Create a new spatial competition environment."""
@@ -74,8 +75,9 @@ def env(
                 vision_radius=vision_radius,
                 num_sellers=num_sellers,
                 max_price=max_price,
-                max_quality=max_quality,
                 max_step_size=max_step_size,
+                include_quality=include_quality,
+                max_quality=max_quality,
                 production_cost_factor=production_cost_factor,
                 movement_cost=movement_cost,
                 seller_position_distr=seller_position_distr,
@@ -86,7 +88,7 @@ def env(
                 buyer_valuation_distr=buyer_valuation_distr,
                 buyer_quality_taste_distr=buyer_quality_taste_distr,
                 buyer_distance_factor_distr=buyer_distance_factor_distr,
-                max_steps=max_steps,
+                max_env_steps=max_env_steps,
                 render_mode=render_mode,
             )
         )
@@ -103,8 +105,9 @@ def raw_env(
     vision_radius: int = 10,
     num_sellers: int = 3,
     max_price: float = 10.0,
-    max_quality: float = 5.0,
     max_step_size: float = 0.1,
+    include_quality: bool = False,
+    max_quality: float = 5.0,
     production_cost_factor: float = 0.5,
     movement_cost: float = 0.1,
     seller_position_distr: MultivariateDistributionProtocol | None = None,
@@ -115,7 +118,7 @@ def raw_env(
     buyer_valuation_distr: DistributionProtocol | None = None,
     buyer_quality_taste_distr: DistributionProtocol | None = None,
     buyer_distance_factor_distr: DistributionProtocol | None = None,
-    max_steps: int = 100,
+    max_env_steps: int = 100,
     render_mode: str | None = None,
 ) -> SpatialCompetitionEnv:
     """Create a raw spatial competition environment."""
@@ -128,8 +131,9 @@ def raw_env(
         vision_radius=vision_radius,
         num_sellers=num_sellers,
         max_price=max_price,
-        max_quality=max_quality,
         max_step_size=max_step_size,
+        include_quality=include_quality,
+        max_quality=max_quality,
         production_cost_factor=production_cost_factor,
         movement_cost=movement_cost,
         seller_position_distr=seller_position_distr,
@@ -140,7 +144,7 @@ def raw_env(
         buyer_valuation_distr=buyer_valuation_distr,
         buyer_quality_taste_distr=buyer_quality_taste_distr,
         buyer_distance_factor_distr=buyer_distance_factor_distr,
-        max_steps=max_steps,
+        max_env_steps=max_env_steps,
         render_mode=render_mode,
     )
 
@@ -170,8 +174,9 @@ class SpatialCompetitionEnv(AECEnv):
         vision_radius: int = 10,
         num_sellers: int = 3,
         max_price: float = 10.0,
-        max_quality: float = 5.0,
         max_step_size: float = 0.1,
+        include_quality: bool = False,
+        max_quality: float = 5.0,
         production_cost_factor: float = 0.5,
         movement_cost: float = 0.1,
         seller_position_distr: MultivariateDistributionProtocol | None = None,
@@ -182,7 +187,7 @@ class SpatialCompetitionEnv(AECEnv):
         buyer_valuation_distr: DistributionProtocol | None = None,
         buyer_quality_taste_distr: DistributionProtocol | None = None,
         buyer_distance_factor_distr: DistributionProtocol | None = None,
-        max_steps: int = 10000,
+        max_env_steps: int = 10000,
         render_mode: str | None = None,
     ) -> None:
         """
@@ -197,6 +202,8 @@ class SpatialCompetitionEnv(AECEnv):
             vision_radius: Radius of vision for limited view modes in number of grid cells
             num_sellers: Number of competing sellers
             max_price: Maximum price sellers can set (P)
+            max_step_size: Maximum movement distance per step
+            include_quality: Whether to include quality in the action space
             max_quality: Maximum quality level (Q)
             max_step_size: Maximum movement distance per step
             production_cost_factor: Production cost parameter (gamma, C(q) = gamma*q^2)
@@ -216,7 +223,7 @@ class SpatialCompetitionEnv(AECEnv):
                 Defaults to constant 1.
             buyer_distance_factor_distr: Distribution for buyer distance factor.
                 Defaults to constant 1.
-            max_steps: Maximum episode length
+            max_env_steps: Maximum number of full environment cycles (each cycle = all agents act once)
             render_mode: Rendering mode
 
         """
@@ -252,8 +259,9 @@ class SpatialCompetitionEnv(AECEnv):
         self.space_resolution = space_resolution
 
         # Environment parameters
-        self.max_steps = max_steps
+        self.max_env_steps = max_env_steps
         self.render_mode = render_mode
+        self.include_quality = include_quality
 
         # Information level parameters
         self.information_level = information_level
@@ -291,20 +299,16 @@ class SpatialCompetitionEnv(AECEnv):
         Action space contains:
         - movement: N-dimensional vector with norm <= max_step_size
         - price: scalar in [0, max_price]
-        - quality: scalar in [0, max_quality]
+        - quality: scalar in [0, max_quality] (only if include_quality=True)
         """
-        self._action_spaces = {
-            agent: spaces.Dict(
-                {
-                    "movement": spaces.Box(
-                        low=-self.max_step_size, high=self.max_step_size, shape=(self.dimensions,), dtype=np.float32
-                    ),
-                    "price": spaces.Box(low=0.0, high=self.max_price, dtype=np.float32),
-                    "quality": spaces.Box(low=0.0, high=self.max_quality, dtype=np.float32),
-                }
-            )
-            for agent in self.possible_agents
+        action_dict: dict[str, spaces.Space] = {
+            "movement": spaces.Box(low=-1.0, high=1.0, shape=(self.dimensions,), dtype=np.float32),
+            "price": spaces.Box(low=0.0, high=self.max_price, shape=(), dtype=np.float32),
         }
+        if self.include_quality:
+            action_dict["quality"] = spaces.Box(low=0.0, high=self.max_quality, shape=(), dtype=np.float32)
+
+        self._action_spaces = {agent: spaces.Dict(action_dict) for agent in self.possible_agents}
 
     def _setup_observation_space(self) -> None:
         """
@@ -336,8 +340,10 @@ class SpatialCompetitionEnv(AECEnv):
         """Get action space for agent."""
         return self._action_spaces[agent]
 
-    def reset(self, seed: int | None = None) -> None:
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> None:
         """Reset the environment to initial state."""
+        del options  # Unused
+
         if seed is not None:
             self.rng = np.random.default_rng(seed)
 
@@ -369,8 +375,10 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Initialize rewards, terminations, truncations, infos
         self.rewards = dict.fromkeys(self.agents, 0.0)
+        self._cumulative_rewards = dict.fromkeys(self.agents, 0.0)
         self.terminations = dict.fromkeys(self.agents, False)
         self.truncations = dict.fromkeys(self.agents, False)
+        self.infos = self._build_infos()
 
         # Initialize observations
         self.observations: dict[str, dict[str, Any]] = {
@@ -380,6 +388,23 @@ class SpatialCompetitionEnv(AECEnv):
         # Initialize agent selector for turn-based play
         self._agent_selector = AgentSelector(self.rng.permutation(self.agents))
         self.agent_selection = self._agent_selector.reset()
+
+    def _build_infos(self) -> dict[str, dict[str, Any]]:
+        """Build info dicts for all agents with useful state information."""
+        assert self.competition is not None
+        infos: dict[str, dict[str, Any]] = {}
+        for agent in self.agents:
+            seller = self.competition.space.sellers_dict[agent]
+            infos[agent] = {
+                "position": seller.position.tensor_coordinates.copy(),
+                "price": seller.price,
+                "quality": seller.quality,
+                "running_sales": seller.running_sales,
+                "total_sales": seller.total_sales,
+                "num_buyers": len(self.competition.space.buyers),
+                "step": self.num_steps,
+            }
+        return infos
 
     def observe(self, agent: str) -> dict[str, Any]:
         """Get observation for the specified agent."""
@@ -396,41 +421,48 @@ class SpatialCompetitionEnv(AECEnv):
 
         agent = self.agent_selection
 
-        # Parse action: [movement, price, quality]
+        # Parse action: [movement, price, quality (optional)]
         movement = Position(
-            tensor_coordinates=np.array(action["movement"], dtype=np.float32),
+            space_coordinates=np.array(action["movement"], dtype=np.float32),
             space_resolution=self.space_resolution,
             topology=self.topology,
+            round_with_warning=True,
         )
         new_price = float(action["price"])
-        new_quality = float(action["quality"])
 
-        # Clip movement, clip price and quality to valid ranges
+        # Clip movement and price to valid ranges
         movement = movement.clip_norm(self.max_step_size)
-        new_price = np.clip(new_price, 0.0, self.max_price)
-        new_quality = np.clip(new_quality, 0.0, self.max_quality)
+        new_price = float(np.clip(new_price, 0.0, self.max_price))
+
+        # Quality is optional - only parse if include_quality is True
+        new_quality: float | None = None
+        if self.include_quality:
+            new_quality = float(action["quality"])
+            new_quality = float(np.clip(new_quality, 0.0, self.max_quality))
 
         self.competition.agent_step(agent, movement, new_price, new_quality)
 
         # Update observations
         self.observations[agent] = self.competition.get_agent_observation(agent).get_observation()
 
-        # Check termination conditions
-        self.num_steps += 1
-        if self.num_steps >= self.max_steps:
-            self.truncations = dict.fromkeys(self.agents, True)
-
-        # Process market interactions if all agents have acted
+        # Process market interactions if all agents have acted (end of cycle)
         if self._agent_selector.is_last():
             self.competition.env_step()
             self.rewards = {agent: self.competition.compute_agent_reward(agent) for agent in self.agents}
+            self.infos = self._build_infos()
+            self._accumulate_rewards()
             self._agent_selector.reinit(self.rng.permutation(self.agents))
+
+            # Increment step count after full cycle and check truncation
+            self.num_steps += 1
+            if self.num_steps >= self.max_env_steps:
+                self.truncations = dict.fromkeys(self.agents, True)
 
         self._next_agent()
 
     def _next_agent(self) -> None:
         """Advance to the next agent in the turn order."""
-        self.agent_selection = next(self._agent_selector)
+        self.agent_selection = self._agent_selector.next()
 
     def render(self) -> None:
         """Render the environment (placeholder implementation)."""

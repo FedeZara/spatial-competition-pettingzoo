@@ -103,7 +103,7 @@ class TestObservation:
 
         assert obs_dict["own_price"] == 5.0
         assert obs_dict["own_quality"] == 0.8
-        assert obs_dict["own_position"] == sample_position
+        assert np.array_equal(obs_dict["own_position"], sample_position.space_coordinates)
         assert np.array_equal(obs_dict["local_view"], sample_arrays["local_view"])
         assert np.array_equal(obs_dict["buyers"], sample_arrays["buyers"])
         assert np.array_equal(obs_dict["sellers_price"], sample_arrays["sellers_price"])

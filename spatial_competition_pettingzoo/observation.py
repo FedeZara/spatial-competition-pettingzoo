@@ -69,13 +69,13 @@ class Observation:
 
     def get_observation(self) -> dict[str, Any]:
         return {
-            "own_position": self._own_position,
+            "own_position": self._own_position.space_coordinates.copy(),
             "own_price": self._own_price,
             "own_quality": self._own_quality,
-            "local_view": self._local_view,
-            **({"buyers": self._buyers} if self._buyers is not None else {}),
-            **({"sellers_price": self._sellers_price} if self._sellers_price is not None else {}),
-            **({"sellers_quality": self._sellers_quality} if self._sellers_quality is not None else {}),
+            "local_view": self._local_view.copy(),
+            **({"buyers": self._buyers.copy()} if self._buyers is not None else {}),
+            **({"sellers_price": self._sellers_price.copy()} if self._sellers_price is not None else {}),
+            **({"sellers_quality": self._sellers_quality.copy()} if self._sellers_quality is not None else {}),
         }
 
     @staticmethod

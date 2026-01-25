@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from spatial_competition_pettingzoo.buyer import Buyer
 from spatial_competition_pettingzoo.competition_space import CompetitionSpace
 from spatial_competition_pettingzoo.observation import Observation
+from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 from spatial_competition_pettingzoo.utils import sample_and_clip_univariate_distribution
 
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
         MultivariateDistributionProtocol,
     )
     from spatial_competition_pettingzoo.enums import InformationLevel
-    from spatial_competition_pettingzoo.position import Position
     from spatial_competition_pettingzoo.topology import Topology
     from spatial_competition_pettingzoo.view_scope import ViewScope
 
@@ -76,16 +76,26 @@ class Competition:
         self._spawn_sellers(agent_ids, seller_position_distr, seller_price_distr, seller_quality_distr)
         self._spawn_new_buyers()
 
-    def agent_step(self, agent_id: str, movement: Position, price: float, quality: float) -> None:
-        """Step the agent."""
-        assert 0.0 <= price <= self.max_price
-        assert 0.0 <= quality <= self.max_quality
-        assert movement.space_norm() <= self.max_step_size
+    def agent_step(
+        self,
+        agent_id: str,
+        movement: Position | None = None,
+        price: float | None = None,
+        quality: float | None = None,
+    ) -> None:
+        """Step the agent. None values mean keep current value."""
+        assert movement is None or movement.space_norm() <= self.max_step_size + Position.SPACE_COORDINATES_TOLERANCE
+        assert price is None or 0.0 <= price <= self.max_price
+        assert quality is None or 0.0 <= quality <= self.max_quality
 
         seller = self.space.sellers_dict[agent_id]
-        seller.move(movement)
-        seller.set_price(price)
-        seller.set_quality(quality)
+
+        if movement is not None:
+            seller.move(movement)
+        if price is not None:
+            seller.set_price(price)
+        if quality is not None:
+            seller.set_quality(quality)
 
     def env_step(self) -> None:
         """Step the environment."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,7 @@ class Position:
         topology: Topology,
         tensor_coordinates: np.ndarray[Any, np.dtype[np.int32]] | None = None,
         space_coordinates: np.ndarray[Any, np.dtype[np.float32]] | None = None,
+        round_with_warning: bool = False,
     ) -> None:
         if tensor_coordinates is None and space_coordinates is None:
             msg = "Either tensor_coordinates or space_coordinates must be provided."
@@ -38,12 +40,21 @@ class Position:
                 abs(self._tensor_coordinates - (space_coordinates * space_resolution))
                 > self.SPACE_COORDINATES_TOLERANCE
             ):
-                msg = f"Space coordinates must be multiples of 1/space_resolution ({1.0 / space_resolution})"
-                raise ValueError(msg)
+                if round_with_warning:
+                    msg = (
+                        f"Space coordinates are not aligned to the grid "
+                        f"(resolution={space_resolution}, step={1.0 / space_resolution:.6g}). "
+                    )
+                    warnings.warn(msg, stacklevel=2)
+                else:
+                    msg = f"Space coordinates must be multiples of 1/space_resolution ({1.0 / space_resolution})"
+                    raise ValueError(msg)
 
         # Validate that tensor_coordinates are in the valid range [0, space_resolution)
-        if np.any(self._tensor_coordinates < 0) or np.any(self._tensor_coordinates >= space_resolution):
-            msg = f"Tensor coordinates must be in the range [0, {space_resolution}). Got: {self._tensor_coordinates}"
+        if np.any(self._tensor_coordinates <= -space_resolution) or np.any(
+            self._tensor_coordinates >= space_resolution
+        ):
+            msg = f"Tensor coordinates must be in the range (-{space_resolution}, {space_resolution}). Got: {self._tensor_coordinates}"
             raise ValueError(msg)
 
         self._space_resolution = space_resolution

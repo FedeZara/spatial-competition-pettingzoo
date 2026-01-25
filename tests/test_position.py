@@ -69,22 +69,11 @@ class TestPosition:
                 space_coordinates=space_coords,
             )
 
-    def test_init_with_negative_space_coordinates_raises_error(self) -> None:
-        """Test that initializing with negative space coordinates raises ValueError."""
-        space_coords = np.array([-0.1, 0.5], dtype=np.float32)
-
-        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\[0, 10\\)"):
-            Position(
-                space_resolution=10,
-                topology=Topology.RECTANGLE,
-                space_coordinates=space_coords,
-            )
-
     def test_init_with_space_coordinates_at_or_above_one_raises_error(self) -> None:
         """Test that initializing with space coordinates >= 1.0 raises ValueError."""
         # Test with coordinate exactly at 1.0
         space_coords_at_one = np.array([0.5, 1.0], dtype=np.float32)
-        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\[0, 10\\)"):
+        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\(-10, 10\\)"):
             Position(
                 space_resolution=10,
                 topology=Topology.RECTANGLE,
@@ -93,19 +82,38 @@ class TestPosition:
 
         # Test with coordinate above 1.0
         space_coords_above_one = np.array([1.2, 0.5], dtype=np.float32)
-        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\[0, 10\\)"):
+        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\(-10, 10\\)"):
             Position(
                 space_resolution=10,
                 topology=Topology.RECTANGLE,
                 space_coordinates=space_coords_above_one,
             )
 
+    def test_init_with_space_coordinates_at_or_below_minus_one_raises_error(self) -> None:
+        """Test that initializing with negative space coordinates raises ValueError."""
+        space_coords_at_minus_one = np.array([-1.0, 0.5], dtype=np.float32)
+        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\(-10, 10\\)"):
+            Position(
+                space_resolution=10,
+                topology=Topology.RECTANGLE,
+                space_coordinates=space_coords_at_minus_one,
+            )
+
+        # Test with coordinate above 1.0
+        space_coords_below_minus_one = np.array([-1.2, 0.5], dtype=np.float32)
+        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\(-10, 10\\)"):
+            Position(
+                space_resolution=10,
+                topology=Topology.RECTANGLE,
+                space_coordinates=space_coords_below_minus_one,
+            )
+
     def test_init_with_mixed_invalid_space_coordinates_raises_error(self) -> None:
         """Test that initializing with mixed invalid space coordinates raises ValueError."""
-        # Test with both negative and >= 1.0 coordinates
-        space_coords = np.array([-0.5, 1.5, 0.3], dtype=np.float32)
+        # Test with both <= -1.0 and >= 1.0 coordinates
+        space_coords = np.array([-1.5, 1.5, 0.3], dtype=np.float32)
 
-        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\[0, 10\\)"):
+        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\(-10, 10\\)"):
             Position(
                 space_resolution=10,
                 topology=Topology.RECTANGLE,
@@ -146,17 +154,6 @@ class TestPosition:
         )
         assert position_close.dimensions == 2
 
-    def test_init_with_negative_tensor_coordinates_raises_error(self) -> None:
-        """Test that initializing with negative tensor coordinates raises ValueError."""
-        tensor_coords = np.array([-1, 5], dtype=np.int32)
-
-        with pytest.raises(ValueError, match="Tensor coordinates must be in the range \\[0, 10\\)"):
-            Position(
-                space_resolution=10,
-                topology=Topology.RECTANGLE,
-                tensor_coordinates=tensor_coords,
-            )
-
     def test_init_with_tensor_coordinates_at_or_above_max_raises_error(self) -> None:
         """Test that initializing with tensor coordinates >= max value raises ValueError."""
         space_resolution = 10
@@ -164,7 +161,9 @@ class TestPosition:
 
         # Test with coordinate exactly at max
         tensor_coords_at_max = np.array([5, max_coord], dtype=np.int32)
-        with pytest.raises(ValueError, match=f"Tensor coordinates must be in the range \\[0, {max_coord}\\)"):
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{max_coord}, {max_coord}\\)"
+        ):
             Position(
                 space_resolution=space_resolution,
                 topology=Topology.RECTANGLE,
@@ -173,11 +172,40 @@ class TestPosition:
 
         # Test with coordinate above max
         tensor_coords_above_max = np.array([max_coord + 5, 3], dtype=np.int32)
-        with pytest.raises(ValueError, match=f"Tensor coordinates must be in the range \\[0, {max_coord}\\)"):
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{max_coord}, {max_coord}\\)"
+        ):
             Position(
                 space_resolution=space_resolution,
                 topology=Topology.RECTANGLE,
                 tensor_coordinates=tensor_coords_above_max,
+            )
+
+    def test_init_with_tensor_coordinates_at_or_below_minus_max_raises_error(self) -> None:
+        """Test that initializing with tensor coordinates >= max value raises ValueError."""
+        space_resolution = 10
+        max_coord = space_resolution  # 10 for space_resolution=10
+
+        # Test with coordinate exactly at max
+        tensor_coords_at_minus_max = np.array([5, -max_coord], dtype=np.int32)
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{max_coord}, {max_coord}\\)"
+        ):
+            Position(
+                space_resolution=space_resolution,
+                topology=Topology.RECTANGLE,
+                tensor_coordinates=tensor_coords_at_minus_max,
+            )
+
+        # Test with coordinate above max
+        tensor_coords_below_minus_max = np.array([-max_coord - 5, 3], dtype=np.int32)
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{max_coord}, {max_coord}\\)"
+        ):
+            Position(
+                space_resolution=space_resolution,
+                topology=Topology.RECTANGLE,
+                tensor_coordinates=tensor_coords_below_minus_max,
             )
 
     def test_init_with_mixed_invalid_tensor_coordinates_raises_error(self) -> None:
@@ -188,7 +216,9 @@ class TestPosition:
         # Test with both negative and >= max coordinates
         tensor_coords = np.array([-2, max_coord + 3, 5], dtype=np.int32)
 
-        with pytest.raises(ValueError, match=f"Tensor coordinates must be in the range \\[0, {max_coord}\\)"):
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{max_coord}, {max_coord}\\)"
+        ):
             Position(
                 space_resolution=space_resolution,
                 topology=Topology.RECTANGLE,
@@ -252,7 +282,9 @@ class TestPosition:
 
         # Test invalid coordinate for coarse resolution
         tensor_coords_invalid = np.array([2, coarse_max], dtype=np.int32)
-        with pytest.raises(ValueError, match=f"Tensor coordinates must be in the range \\[0, {coarse_max}\\)"):
+        with pytest.raises(
+            ValueError, match=f"Tensor coordinates must be in the range \\(-{coarse_max}, {coarse_max}\\)"
+        ):
             Position(
                 space_resolution=coarse_resolution,
                 topology=Topology.TORUS,
