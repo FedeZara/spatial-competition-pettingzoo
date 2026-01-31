@@ -61,6 +61,8 @@ class TestCompetition:
             "max_step_size": 1.0,
             "production_cost_factor": 0.5,
             "movement_cost": 0.1,
+            "include_quality": True,
+            "include_buyer_valuation": True,
             "seller_position_distr": mock_dependencies["seller_position_distr"],
             "seller_price_distr": mock_dependencies["seller_price_distr"],
             "seller_quality_distr": mock_dependencies["seller_quality_distr"],
@@ -124,10 +126,6 @@ class TestCompetition:
         # Verify sellers were spawned (3 sellers)
         assert mock_seller.call_count == 3
         assert mock_space.add_seller.call_count == 3
-
-        # Verify buyers were spawned (5 buyers during initialization)
-        assert mock_buyer.call_count == 5
-        assert mock_space.add_buyer.call_count == 5
 
     @patch("spatial_competition_pettingzoo.competition.CompetitionSpace")
     @patch("spatial_competition_pettingzoo.competition.sample_and_clip_univariate_distribution")
@@ -240,8 +238,39 @@ class TestCompetition:
 
     @patch("spatial_competition_pettingzoo.competition.CompetitionSpace")
     @patch("spatial_competition_pettingzoo.competition.sample_and_clip_univariate_distribution")
+    def test_start_cycle(
+        self, mock_sample_clip: Mock, mock_space_class: Mock, competition_params: dict[str, Any]
+    ) -> None:
+        """Test start_cycle method."""
+        # Setup mocks
+        mock_space = Mock()
+        mock_space_class.return_value = mock_space
+        mock_space.sample_free_position.return_value = Mock()
+        mock_space.num_free_cells = 10
+        mock_sample_clip.return_value = 1.0
+
+        mock_buyer1 = Mock()
+        mock_buyer2 = Mock()
+        mock_buyer3 = Mock()
+        mock_space.buyers = [mock_buyer1, mock_buyer2, mock_buyer3]
+        mock_buyer1.has_purchased = True
+        mock_buyer2.has_purchased = False
+        mock_buyer3.has_purchased = True
+
+        # Create competition
+        competition = Competition(**competition_params)
+
+        # Test start_cycle
+        competition.start_cycle()
+
+        # Verify buyers were spawned
+        assert mock_space.add_buyer.call_count == 5
+        mock_space.remove_buyer.assert_has_calls([call(mock_buyer1), call(mock_buyer3)])
+
+    @patch("spatial_competition_pettingzoo.competition.CompetitionSpace")
+    @patch("spatial_competition_pettingzoo.competition.sample_and_clip_univariate_distribution")
     @patch("spatial_competition_pettingzoo.competition.random.shuffle")
-    def test_env_step(
+    def test_end_cycle(
         self,
         mock_shuffle: Mock,
         mock_sample_clip: Mock,
@@ -275,7 +304,7 @@ class TestCompetition:
         competition = Competition(**competition_params)
 
         # Test env step
-        competition.env_step()
+        competition.end_cycle()
 
         # Verify sellers reset their sales
         mock_seller1.reset_running_sales.assert_called_once()
@@ -286,12 +315,6 @@ class TestCompetition:
         mock_buyers_list.copy.assert_called_once()
         mock_buyer1.choose_seller_and_buy.assert_called_once_with([mock_seller1, mock_seller2])
         mock_buyer2.choose_seller_and_buy.assert_called_once_with([mock_seller1, mock_seller2])
-
-        # Verify successful buyer was removed
-        mock_space.remove_buyer.assert_called_once_with(mock_buyer1)
-
-        # Verify new buyers were spawned
-        assert mock_space.add_buyer.call_count >= 5  # Initial + new buyers
 
     @patch("spatial_competition_pettingzoo.competition.CompetitionSpace")
     @patch("spatial_competition_pettingzoo.competition.sample_and_clip_univariate_distribution")
@@ -451,11 +474,7 @@ class TestCompetition:
 
         # Setup sellers list for process_sales in env_step
         mock_space.sellers = []
-
-        # Setup buyers list that can be copied for process_sales
-        mock_buyers_list = Mock()
-        mock_buyers_list.copy.return_value = []
-        mock_space.buyers = mock_buyers_list
+        mock_space.buyers = []
 
         mock_buyer = Mock()
         mock_buyer_class.return_value = mock_buyer
@@ -511,7 +530,7 @@ class TestCompetition:
         mock_space.add_buyer.reset_mock()
 
         # Test spawning new buyers explicitly
-        competition.env_step()
+        competition.start_cycle()
 
         # Verify new buyers were created
         assert mock_buyer_class.call_count == 5
@@ -594,11 +613,6 @@ class TestCompetition:
         mock_buyer2.choose_seller_and_buy.assert_called_once_with([mock_seller1, mock_seller2])
         mock_buyer3.choose_seller_and_buy.assert_called_once_with([mock_seller1, mock_seller2])
 
-        # Verify successful buyers were removed (buyer1 and buyer3)
-        expected_remove_calls = [call(mock_buyer1), call(mock_buyer3)]
-        mock_space.remove_buyer.assert_has_calls(expected_remove_calls, any_order=True)
-        assert mock_space.remove_buyer.call_count == 2
-
     @patch("spatial_competition_pettingzoo.competition.CompetitionSpace")
     @patch("spatial_competition_pettingzoo.competition.sample_and_clip_univariate_distribution")
     def test_integration_full_step_cycle(
@@ -631,7 +645,7 @@ class TestCompetition:
 
         # Execute full cycle
         competition.agent_step("seller_0", mock_position, 7.5, 3.2)
-        competition.env_step()
+        competition.end_cycle()
         reward = competition.compute_agent_reward("seller_0")
 
         # Verify all operations work together

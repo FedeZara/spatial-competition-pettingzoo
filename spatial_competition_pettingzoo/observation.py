@@ -22,7 +22,7 @@ class Observation:
     def __init__(
         self,
         own_price: float,
-        own_quality: float,
+        own_quality: float | None,
         own_position: Position,
         local_view: np.ndarray,
         buyers: np.ndarray | None,
@@ -71,7 +71,7 @@ class Observation:
         return {
             "own_position": self._own_position.space_coordinates.copy(),
             "own_price": self._own_price,
-            "own_quality": self._own_quality,
+            **({"own_quality": self._own_quality} if self._own_quality is not None else {}),
             "local_view": self._local_view.copy(),
             **({"buyers": self._buyers.copy()} if self._buyers is not None else {}),
             **({"sellers_price": self._sellers_price.copy()} if self._sellers_price is not None else {}),

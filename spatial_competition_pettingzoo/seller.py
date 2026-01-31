@@ -7,7 +7,7 @@ class Seller:
         agent_id: str,
         position: Position,
         price: float,
-        quality: float,
+        quality: float | None,
     ) -> None:
         self._agent_id = agent_id
         self.position = position
@@ -47,7 +47,9 @@ class Seller:
         self._total_sales += 1
 
     def step_reward(self, production_cost_factor: float, movement_cost: float) -> float:
-        production_cost = production_cost_factor * self.quality**2
+        production_cost = 0.0
+        if self.quality is not None:
+            production_cost = production_cost_factor * self.quality**2
         movement_cost = movement_cost * self._last_movement_size
         revenue = self._running_sales * self.price
         return revenue - production_cost - movement_cost

@@ -32,17 +32,19 @@ class Competition:
         view_scope: ViewScope,
         agent_ids: list[str],
         max_price: float,
+        include_quality: bool,
         max_quality: float,
         max_step_size: float,
         production_cost_factor: float,
         movement_cost: float,
         seller_position_distr: MultivariateDistributionProtocol,
         seller_price_distr: DistributionProtocol,
-        seller_quality_distr: DistributionProtocol,
+        seller_quality_distr: DistributionProtocol | None,
         new_buyers_per_step: int,
         buyer_position_distr: MultivariateDistributionProtocol,
-        buyer_valuation_distr: DistributionProtocol,
-        buyer_quality_taste_distr: DistributionProtocol,
+        include_buyer_valuation: bool,
+        buyer_valuation_distr: DistributionProtocol | None,
+        buyer_quality_taste_distr: DistributionProtocol | None,
         buyer_distance_factor_distr: DistributionProtocol,
         rng: np.random.Generator,
     ) -> None:
@@ -56,6 +58,8 @@ class Competition:
 
         self.max_price = max_price
         self.max_quality = max_quality
+        self.include_quality = include_quality
+        self.include_buyer_valuation = include_buyer_valuation
         self.information_level = information_level
         self.view_scope = view_scope
 
@@ -74,7 +78,7 @@ class Competition:
         self.rng = rng
 
         self._spawn_sellers(agent_ids, seller_position_distr, seller_price_distr, seller_quality_distr)
-        self._spawn_new_buyers()
+        self._new_cycle = True
 
     def agent_step(
         self,
@@ -94,13 +98,17 @@ class Competition:
             seller.move(movement)
         if price is not None:
             seller.set_price(price)
-        if quality is not None:
+        if self.include_quality and quality is not None:
             seller.set_quality(quality)
 
-    def env_step(self) -> None:
-        """Step the environment."""
-        self._process_sales()
+    def start_cycle(self) -> None:
+        """Handle buyer removal and spawning at the start of a new cycle."""
+        self._remove_buyers_who_purchased()
         self._spawn_new_buyers()
+
+    def end_cycle(self) -> None:
+        """Step the environment: process sales and mark that buyer update is needed."""
+        self._process_sales()
 
     def compute_agent_reward(self, agent_id: str) -> float:
         """Compute rewards for all agents."""
@@ -116,22 +124,27 @@ class Competition:
             agent_id=agent_id,
         )
 
+    def _remove_buyers_who_purchased(self) -> None:
+        """Remove buyers who made a purchase in the previous step."""
+        buyers_to_remove = [buyer for buyer in self.space.buyers if buyer.has_purchased]
+        for buyer in buyers_to_remove:
+            self.space.remove_buyer(buyer)
+
     def _process_sales(self) -> None:
-        """Process sales."""
+        """Process sales - buyers choose sellers and make purchases."""
         for seller in self.space.sellers:
             seller.reset_running_sales()
         buyers = self.space.buyers.copy()
         random.shuffle(buyers)
         for buyer in buyers:
-            if buyer.choose_seller_and_buy(self.space.sellers):
-                self.space.remove_buyer(buyer)
+            buyer.choose_seller_and_buy(self.space.sellers)
 
     def _spawn_sellers(
         self,
         agent_ids: list[str],
         seller_position_distr: MultivariateDistributionProtocol,
         seller_price_distr: DistributionProtocol,
-        seller_quality_distr: DistributionProtocol,
+        seller_quality_distr: DistributionProtocol | None,
     ) -> None:
         """Spawn sellers."""
         for agent_id in agent_ids:
@@ -143,9 +156,12 @@ class Competition:
             price = sample_and_clip_univariate_distribution(
                 "price", seller_price_distr, self.rng, min_value=0.0, max_value=self.max_price
             )
-            quality = sample_and_clip_univariate_distribution(
-                "quality", seller_quality_distr, self.rng, min_value=0.0, max_value=self.max_quality
-            )
+            quality = None
+            if self.include_quality:
+                assert seller_quality_distr is not None
+                quality = sample_and_clip_univariate_distribution(
+                    "quality", seller_quality_distr, self.rng, min_value=0.0, max_value=self.max_quality
+                )
             self.space.add_seller(Seller(agent_id=agent_id, position=position, price=price, quality=quality))
 
     def _spawn_new_buyers(self) -> None:
@@ -155,13 +171,19 @@ class Competition:
                 break
 
             position = self.space.sample_free_position(self.buyer_position_distr, self.rng)
-            value = sample_and_clip_univariate_distribution("value", self.buyer_valuation_distr, self.rng)
-            quality_taste = sample_and_clip_univariate_distribution(
-                "quality_taste", self.buyer_quality_taste_distr, self.rng
-            )
             distance_factor = sample_and_clip_univariate_distribution(
                 "distance_factor", self.buyer_distance_factor_distr, self.rng
             )
+
+            value = None
+            if self.buyer_valuation_distr is not None:
+                value = sample_and_clip_univariate_distribution("value", self.buyer_valuation_distr, self.rng)
+
+            quality_taste = None
+            if self.buyer_quality_taste_distr is not None:
+                quality_taste = sample_and_clip_univariate_distribution(
+                    "quality_taste", self.buyer_quality_taste_distr, self.rng
+                )
 
             self.space.add_buyer(
                 Buyer(
