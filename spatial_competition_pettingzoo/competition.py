@@ -41,6 +41,7 @@ class Competition:
         seller_price_distr: DistributionProtocol,
         seller_quality_distr: DistributionProtocol | None,
         new_buyers_per_step: int,
+        max_buyers: int,
         buyer_position_distr: MultivariateDistributionProtocol,
         include_buyer_valuation: bool,
         buyer_valuation_distr: DistributionProtocol | None,
@@ -69,6 +70,7 @@ class Competition:
 
         # Buyer generation parameters
         self.new_buyers_per_step = new_buyers_per_step
+        self.max_buyers = max_buyers
         self.buyer_position_distr = buyer_position_distr
         self.buyer_valuation_distr = buyer_valuation_distr
         self.buyer_quality_taste_distr = buyer_quality_taste_distr
@@ -168,6 +170,8 @@ class Competition:
         """Spawn new buyers."""
         for _ in range(self.new_buyers_per_step):
             if self.space.num_free_cells == 0:
+                break
+            if len(self.space.buyers) >= self.max_buyers:
                 break
 
             position = self.space.sample_free_position(self.buyer_position_distr, self.rng)

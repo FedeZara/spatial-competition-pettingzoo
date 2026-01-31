@@ -57,6 +57,7 @@ def env(
     seller_price_distr: DistributionProtocol | None = None,
     seller_quality_distr: DistributionProtocol | None = None,
     new_buyers_per_step: int = 50,
+    max_buyers: int = 200,
     buyer_position_distr: MultivariateDistributionProtocol | None = None,
     include_buyer_valuation: bool = False,
     buyer_valuation_distr: DistributionProtocol | None = None,
@@ -87,6 +88,7 @@ def env(
                 seller_price_distr=seller_price_distr,
                 seller_quality_distr=seller_quality_distr,
                 new_buyers_per_step=new_buyers_per_step,
+                max_buyers=max_buyers,
                 buyer_position_distr=buyer_position_distr,
                 include_buyer_valuation=include_buyer_valuation,
                 buyer_valuation_distr=buyer_valuation_distr,
@@ -119,6 +121,7 @@ def raw_env(
     seller_price_distr: DistributionProtocol | None = None,
     seller_quality_distr: DistributionProtocol | None = None,
     new_buyers_per_step: int = 50,
+    max_buyers: int = 200,
     buyer_position_distr: MultivariateDistributionProtocol | None = None,
     include_buyer_valuation: bool = False,
     buyer_valuation_distr: DistributionProtocol | None = None,
@@ -147,6 +150,7 @@ def raw_env(
         seller_price_distr=seller_price_distr,
         seller_quality_distr=seller_quality_distr,
         new_buyers_per_step=new_buyers_per_step,
+        max_buyers=max_buyers,
         buyer_position_distr=buyer_position_distr,
         include_buyer_valuation=include_buyer_valuation,
         buyer_valuation_distr=buyer_valuation_distr,
@@ -192,6 +196,7 @@ class SpatialCompetitionEnv(AECEnv):
         seller_price_distr: DistributionProtocol | None = None,
         seller_quality_distr: DistributionProtocol | None = None,
         new_buyers_per_step: int = 50,
+        max_buyers: int = 200,
         buyer_position_distr: MultivariateDistributionProtocol | None = None,
         include_buyer_valuation: bool = False,
         buyer_valuation_distr: DistributionProtocol | None = None,
@@ -226,6 +231,7 @@ class SpatialCompetitionEnv(AECEnv):
             seller_quality_distr: Distribution for seller quality.
                 Defaults to constant max_quality/2.
             new_buyers_per_step: Number of new buyers to spawn each environment step
+            max_buyers: Maximum number of buyers that can exist at any time.
             buyer_position_distr: Multivariate distribution for buyer positions.
                 Defaults to multivariate uniform distribution in the unit hypercube.
             include_buyer_valuation: Whether buyers have finite valuations.
@@ -255,6 +261,7 @@ class SpatialCompetitionEnv(AECEnv):
         self.production_cost_factor = production_cost_factor
         self.movement_cost = movement_cost
         self.new_buyers_per_step = new_buyers_per_step
+        self.max_buyers = max_buyers
 
         # Position and price paramters
         self.seller_position_distr = seller_position_distr or MultivariateUniformDistribution(
@@ -394,6 +401,7 @@ class SpatialCompetitionEnv(AECEnv):
             seller_price_distr=self.seller_price_distr,
             seller_quality_distr=self.seller_quality_distr,
             new_buyers_per_step=self.new_buyers_per_step,
+            max_buyers=self.max_buyers,
             buyer_position_distr=self.buyer_position_distr,
             buyer_valuation_distr=self.buyer_valuation_distr,
             buyer_quality_taste_distr=self.buyer_quality_taste_distr,
