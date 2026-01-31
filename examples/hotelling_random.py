@@ -122,11 +122,10 @@ Close the window to stop.
         buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
         max_env_steps=num_cycles,
         render_mode="human",
-        step_delay=0.2,
     )
 
     # Reset environment
-    environment.reset(seed=seed)
+    observations, _ = environment.reset(seed=seed)
 
     # Create policies for each seller
     policies = {
@@ -142,43 +141,35 @@ Close the window to stop.
     print(f"Starting simulation with {num_cycles} cycles...")
     print("Initial positions:")
     for agent in environment.possible_agents:
-        obs = environment.observe(agent)
-        print(f"  {agent}: position = {obs['own_position'][0]:.3f}")
+        print(f"  {agent}: position = {observations[agent]['own_position'][0]:.3f}")
     print("-" * 60)
 
-    # Track cycle progress
-    cycle_count = 0
-    agents_acted_this_cycle = 0
+    # Track rewards for policy updates
+    rewards: dict[str, float] = dict.fromkeys(environment.possible_agents, 0.0)
     running = True
 
     try:
-        # Main simulation loop
-        for agent in environment.agent_iter():
+        # Main simulation loop - parallel stepping
+        for cycle_count in range(1, num_cycles + 1):
             if not running:
                 break
 
-            # Get current state
-            observation, reward, termination, truncation, _ = environment.last()
+            # Collect actions from all agents
+            actions = {}
+            for agent in environment.agents:
+                actions[agent] = policies[agent].compute_action(observations[agent], rewards[agent])
 
-            # Get action (None if episode is done)
-            action = None if termination or truncation else policies[agent].compute_action(observation, reward)
+            # Step all agents simultaneously
+            observations, rewards, terminations, truncations, _ = environment.step(actions)
 
-            # Take action (rendering and delays handled internally)
-            environment.step(action)
+            # Check if all agents are done
+            if all(terminations.values()) or all(truncations.values()):
+                break
 
-            # Track cycles
-            agents_acted_this_cycle += 1
-            if agents_acted_this_cycle >= len(environment.possible_agents):
-                agents_acted_this_cycle = 0
-                cycle_count += 1
-
-                # Print progress every 25 cycles
-                if cycle_count % 25 == 0:
-                    positions = []
-                    for ag in environment.possible_agents:
-                        obs = environment.observe(ag)
-                        positions.append(obs["own_position"][0])
-                    print(f"Cycle {cycle_count:3d}: Positions = ({positions[0]:.3f}, {positions[1]:.3f})")
+            # Print progress every 25 cycles
+            if cycle_count % 25 == 0:
+                positions = [observations[ag]["own_position"][0] for ag in environment.possible_agents]
+                print(f"Cycle {cycle_count:3d}: Positions = ({positions[0]:.3f}, {positions[1]:.3f})")
 
     except KeyboardInterrupt:
         print("\nSimulation interrupted by user.")
@@ -188,12 +179,11 @@ Close the window to stop.
     print("-" * 60)
     print("Final Results:")
     for agent in environment.possible_agents:
-        obs = environment.observe(agent)
-        pos = obs["own_position"][0]
+        pos = observations[agent]["own_position"][0]
         print(f"  {agent}: position = {pos:.3f}")
 
     if len(environment.possible_agents) == 2:
-        positions = [environment.observe(ag)["own_position"][0] for ag in environment.possible_agents]
+        positions = [observations[ag]["own_position"][0] for ag in environment.possible_agents]
         distance = abs(positions[1] - positions[0])
         midpoint = sum(positions) / 2
         print(f"  Distance between sellers: {distance:.3f}")

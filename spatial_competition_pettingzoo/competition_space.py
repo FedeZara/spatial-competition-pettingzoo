@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pettingzoo.utils.env import np
+import numpy as np
 
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.topology import Topology
@@ -103,6 +103,30 @@ class CompetitionSpace:
     def remove_buyer(self, buyer: Buyer) -> None:
         self._buyers.remove(buyer)
 
+    def is_position_free_of_sellers(self, position: Position, exclude_agent_id: str | None = None) -> bool:
+        """Check if a position is free of sellers.
+
+        Args:
+            position: The position to check.
+            exclude_agent_id: Optional agent ID to exclude from the check (e.g., the moving seller).
+
+        Returns:
+            True if the position is free of sellers, False otherwise.
+        """
+        for seller in self._sellers_dict.values():
+            if exclude_agent_id is not None and seller.agent_id == exclude_agent_id:
+                continue
+            if seller.position == position:
+                return False
+        return True
+
+    def is_position_free_of_buyers(self, position: Position) -> bool:
+        """Check if a position is free of buyers."""
+        for buyer in self._buyers:
+            if buyer.position == position:
+                return False
+        return True
+
     def _is_in_interval(self, start: int, end: int, coordinate: int) -> bool:
         match self._topology:
             case Topology.RECTANGLE:
@@ -135,20 +159,12 @@ class CompetitionSpace:
             position: The position to check.
 
         Returns:
-            True if the position is free, False otherwise.
+            True if the position is free (no seller or buyer), False otherwise.
 
         """
-        assert self.is_in_subspace(position)
-
-        for buyer in self._buyers:
-            if buyer.position == position:
-                return False
-
-        for seller in self.sellers:  # noqa: SIM110
-            if seller.position == position:
-                return False
-
-        return True
+        return self.is_position_free_of_sellers(position, exclude_agent_id=None) and self.is_position_free_of_buyers(
+            position
+        )
 
     @property
     def num_cells(self) -> int:

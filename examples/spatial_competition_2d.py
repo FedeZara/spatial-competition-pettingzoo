@@ -147,11 +147,10 @@ Close the window to stop.
         ),
         max_env_steps=num_cycles,
         render_mode="human",
-        step_delay=0.1,
     )
 
     # Reset environment
-    environment.reset(seed=seed)
+    observations, _ = environment.reset(seed=seed)
 
     # Create policies for each seller
     policies = {
@@ -167,45 +166,40 @@ Close the window to stop.
     print(f"Starting simulation with {num_cycles} cycles...")
     print("Initial positions:")
     for agent in environment.possible_agents:
-        obs = environment.observe(agent)
-        pos = obs["own_position"]
+        pos = observations[agent]["own_position"]
         print(f"  {agent}: position = ({pos[0]:.3f}, {pos[1]:.3f})")
     print("-" * 60)
     print("Controls: Space=Pause, Click=Select entity, Slider=Speed")
     print("-" * 60)
 
-    # Track cycle progress
-    cycle_count = 0
-    agents_acted_this_cycle = 0
+    # Track rewards for policy updates
+    rewards: dict[str, float] = dict.fromkeys(environment.possible_agents, 0.0)
     running = True
 
     try:
-        # Main simulation loop
-        for agent in environment.agent_iter():
+        # Main simulation loop - parallel stepping
+        for cycle_count in range(1, num_cycles + 1):
             if not running:
                 break
 
-            # Get current state
-            observation, reward, termination, truncation, _ = environment.last()
+            # Collect actions from all agents
+            actions = {}
+            for agent in environment.agents:
+                actions[agent] = policies[agent].compute_action(observations[agent], rewards[agent])
 
-            # Get action (None if episode is done)
-            action = None if termination or truncation else policies[agent].compute_action(observation, reward)
+            # Step all agents simultaneously
+            observations, rewards, terminations, truncations, _ = environment.step(actions)
 
-            environment.step(action)
+            # Check if all agents are done
+            if all(terminations.values()) or all(truncations.values()):
+                break
 
-            # Track cycles
-            agents_acted_this_cycle += 1
-            if agents_acted_this_cycle >= len(environment.possible_agents):
-                agents_acted_this_cycle = 0
-                cycle_count += 1
-
-                # Print progress every 25 cycles
-                if cycle_count % 25 == 0:
-                    print(f"Cycle {cycle_count:3d}:")
-                    for ag in environment.possible_agents:
-                        obs = environment.observe(ag)
-                        pos = obs["own_position"]
-                        print(f"    {ag}: ({pos[0]:.3f}, {pos[1]:.3f})")
+            # Print progress every 25 cycles
+            if cycle_count % 25 == 0:
+                print(f"Cycle {cycle_count:3d}:")
+                for ag in environment.possible_agents:
+                    pos = observations[ag]["own_position"]
+                    print(f"    {ag}: ({pos[0]:.3f}, {pos[1]:.3f})")
 
     except KeyboardInterrupt:
         print("\nSimulation interrupted by user.")
@@ -215,8 +209,7 @@ Close the window to stop.
     print("-" * 60)
     print("Final Results:")
     for agent in environment.possible_agents:
-        obs = environment.observe(agent)
-        pos = obs["own_position"]
+        pos = observations[agent]["own_position"]
         print(f"  {agent}: position = ({pos[0]:.3f}, {pos[1]:.3f})")
 
     print("=" * 60)

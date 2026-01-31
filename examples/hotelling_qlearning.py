@@ -294,7 +294,7 @@ def run_qlearning_simulation(
         buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
         max_env_steps=steps_per_episode,
     )
-    sample_env.reset(seed=seed)
+    sample_env.reset(seed=seed)  # Returns (observations, infos) but we don't need them here
 
     # Create Q-learning agents
     agents = {
@@ -343,7 +343,7 @@ def run_qlearning_simulation(
             buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
             max_env_steps=steps_per_episode,
         )
-        hotelling_env.reset(seed=seed + episode)
+        observations, _ = hotelling_env.reset(seed=seed + episode)
 
         # Reset agents for new episode
         for agent in agents.values():
@@ -352,23 +352,33 @@ def run_qlearning_simulation(
         # Episode tracking
         episode_rewards = {agent_id: 0.0 for agent_id in agents}
         final_positions = {agent_id: 0.5 for agent_id in agents}
+        rewards: dict[str, float] = dict.fromkeys(agents, 0.0)
 
-        # Run episode
-        for agent_id in hotelling_env.agent_iter():
-            observation, reward, termination, truncation, _ = hotelling_env.last()
+        # Run episode using parallel stepping
+        for _ in range(steps_per_episode):
+            # Collect actions from all agents
+            actions: dict[str, dict[str, Any]] = {}
+            for agent_id in hotelling_env.agents:
+                actions[agent_id] = agents[agent_id].compute_action(
+                    observations[agent_id], rewards[agent_id], training=True
+                )
+                final_positions[agent_id] = float(observations[agent_id]["own_position"][0])
 
-            if termination or truncation:
-                action = None
-                # Final update for terminated agent
-                if agents[agent_id].prev_state is not None:
-                    state = agents[agent_id].discretize_state(observation)
-                    agents[agent_id].update(reward, state, done=True)
-            else:
-                action = agents[agent_id].compute_action(observation, reward, training=True)
-                final_positions[agent_id] = float(observation["own_position"][0])
+            # Step all agents simultaneously
+            observations, rewards, terminations, truncations, _ = hotelling_env.step(actions)
 
-            episode_rewards[agent_id] += reward
-            hotelling_env.step(action)
+            # Accumulate rewards
+            for agent_id in agents:
+                episode_rewards[agent_id] += rewards[agent_id]
+
+            # Check if episode is done
+            if all(terminations.values()) or all(truncations.values()):
+                # Final update for all agents
+                for agent_id in agents:
+                    if agents[agent_id].prev_state is not None:
+                        state = agents[agent_id].discretize_state(observations[agent_id])
+                        agents[agent_id].update(rewards[agent_id], state, done=True)
+                break
 
         hotelling_env.close()
 
@@ -474,27 +484,37 @@ def evaluate_agents(
             buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
             max_env_steps=steps_per_episode,
         )
-        hotelling_env.reset(seed=seed + episode)
+        observations, _ = hotelling_env.reset(seed=seed + episode)
 
         # Reset agents
         for agent in agents.values():
             agent.reset_episode()
 
         episode_rewards: dict[str, float] = dict.fromkeys(agents, 0.0)
-        final_obs: dict[str, dict[str, Any]] = {agent_id: {} for agent_id in agents}
+        final_obs: dict[str, dict[str, Any]] = {agent_id: observations[agent_id].copy() for agent_id in agents}
+        rewards: dict[str, float] = dict.fromkeys(agents, 0.0)
 
-        for agent_id in hotelling_env.agent_iter():
-            observation, reward, termination, truncation, _ = hotelling_env.last()
-
-            if termination or truncation:
-                action = None
-            else:
+        # Run episode using parallel stepping
+        for _ in range(steps_per_episode):
+            # Collect actions from all agents using greedy policy
+            actions: dict[str, dict[str, Any]] = {}
+            for agent_id in hotelling_env.agents:
                 # Use greedy policy (training=False disables exploration)
-                action = agents[agent_id].compute_action(observation, reward, training=False)
-                final_obs[agent_id] = observation
+                actions[agent_id] = agents[agent_id].compute_action(
+                    observations[agent_id], rewards[agent_id], training=False
+                )
+                final_obs[agent_id] = observations[agent_id]
 
-            episode_rewards[agent_id] += reward
-            hotelling_env.step(action)
+            # Step all agents simultaneously
+            observations, rewards, terminations, truncations, _ = hotelling_env.step(actions)
+
+            # Accumulate rewards
+            for agent_id in agents:
+                episode_rewards[agent_id] += rewards[agent_id]
+
+            # Check if episode is done
+            if all(terminations.values()) or all(truncations.values()):
+                break
 
         hotelling_env.close()
 

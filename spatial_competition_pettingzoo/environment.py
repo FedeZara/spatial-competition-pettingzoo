@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from gymnasium import spaces
-from pettingzoo import AECEnv
-from pettingzoo.utils import AgentSelector, wrappers
+from pettingzoo import ParallelEnv
 
+from spatial_competition_pettingzoo.action import Action
 from spatial_competition_pettingzoo.competition import Competition
 from spatial_competition_pettingzoo.distributions import (
     ConstantUnivariateDistribution,
@@ -65,40 +65,36 @@ def env(
     buyer_distance_factor_distr: DistributionProtocol | None = None,
     max_env_steps: int = 100,
     render_mode: str | None = None,
-    step_delay: float = 0.1,
-) -> wrappers.OrderEnforcingWrapper:
-    """Create a new spatial competition environment."""
-    return wrappers.OrderEnforcingWrapper(
-        wrappers.AssertOutOfBoundsWrapper(
-            raw_env(
-                dimensions=dimensions,
-                topology=topology,
-                space_resolution=space_resolution,
-                information_level=information_level,
-                view_scope=view_scope,
-                vision_radius=vision_radius,
-                num_sellers=num_sellers,
-                max_price=max_price,
-                max_step_size=max_step_size,
-                include_quality=include_quality,
-                max_quality=max_quality,
-                production_cost_factor=production_cost_factor,
-                movement_cost=movement_cost,
-                seller_position_distr=seller_position_distr,
-                seller_price_distr=seller_price_distr,
-                seller_quality_distr=seller_quality_distr,
-                new_buyers_per_step=new_buyers_per_step,
-                max_buyers=max_buyers,
-                buyer_position_distr=buyer_position_distr,
-                include_buyer_valuation=include_buyer_valuation,
-                buyer_valuation_distr=buyer_valuation_distr,
-                buyer_quality_taste_distr=buyer_quality_taste_distr,
-                buyer_distance_factor_distr=buyer_distance_factor_distr,
-                max_env_steps=max_env_steps,
-                render_mode=render_mode,
-                step_delay=step_delay,
-            )
-        )
+    render_phase_delay: float = 0.2,
+) -> SpatialCompetitionEnv:
+    """Create a new spatial competition environment (Parallel API)."""
+    return raw_env(
+        dimensions=dimensions,
+        topology=topology,
+        space_resolution=space_resolution,
+        information_level=information_level,
+        view_scope=view_scope,
+        vision_radius=vision_radius,
+        num_sellers=num_sellers,
+        max_price=max_price,
+        max_step_size=max_step_size,
+        include_quality=include_quality,
+        max_quality=max_quality,
+        production_cost_factor=production_cost_factor,
+        movement_cost=movement_cost,
+        seller_position_distr=seller_position_distr,
+        seller_price_distr=seller_price_distr,
+        seller_quality_distr=seller_quality_distr,
+        new_buyers_per_step=new_buyers_per_step,
+        max_buyers=max_buyers,
+        buyer_position_distr=buyer_position_distr,
+        include_buyer_valuation=include_buyer_valuation,
+        buyer_valuation_distr=buyer_valuation_distr,
+        buyer_quality_taste_distr=buyer_quality_taste_distr,
+        buyer_distance_factor_distr=buyer_distance_factor_distr,
+        max_env_steps=max_env_steps,
+        render_mode=render_mode,
+        render_phase_delay=render_phase_delay,
     )
 
 
@@ -129,7 +125,7 @@ def raw_env(
     buyer_distance_factor_distr: DistributionProtocol | None = None,
     max_env_steps: int = 100,
     render_mode: str | None = None,
-    step_delay: float = 0.1,
+    render_phase_delay: float = 0.2,
 ) -> SpatialCompetitionEnv:
     """Create a raw spatial competition environment."""
     return SpatialCompetitionEnv(
@@ -158,13 +154,13 @@ def raw_env(
         buyer_distance_factor_distr=buyer_distance_factor_distr,
         max_env_steps=max_env_steps,
         render_mode=render_mode,
-        step_delay=step_delay,
+        render_phase_delay=render_phase_delay,
     )
 
 
-class SpatialCompetitionEnv(AECEnv):
+class SpatialCompetitionEnv(ParallelEnv):
     """
-    Spatial Competition Environment using PettingZoo AEC API.
+    Spatial Competition Environment using PettingZoo Parallel API.
 
     Sellers compete in a spatial market where buyers make purchasing decisions
     based on price, quality, distance, and personal preferences.
@@ -204,7 +200,7 @@ class SpatialCompetitionEnv(AECEnv):
         buyer_distance_factor_distr: DistributionProtocol | None = None,
         max_env_steps: int = 10000,
         render_mode: str | None = None,
-        step_delay: float = 0.1,
+        render_phase_delay: float = 0.2,
     ) -> None:
         """
         Initialize the spatial competition environment.
@@ -245,7 +241,7 @@ class SpatialCompetitionEnv(AECEnv):
                 Defaults to constant 1.
             max_env_steps: Maximum number of full environment cycles (each cycle = all agents act once)
             render_mode: Rendering mode
-            step_delay: Base delay between steps in seconds (adjusted by speed multiplier)
+            render_phase_delay: Delay between render phases in seconds
 
         """
         super().__init__()
@@ -292,7 +288,7 @@ class SpatialCompetitionEnv(AECEnv):
         # Environment parameters
         self.max_env_steps = max_env_steps
         self.render_mode = render_mode
-        self.step_delay = step_delay
+        self.render_phase_delay = render_phase_delay
 
         # Information level parameters
         self.information_level = information_level
@@ -373,8 +369,14 @@ class SpatialCompetitionEnv(AECEnv):
         """Get action space for agent."""
         return self._action_spaces[agent]
 
-    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> None:
-        """Reset the environment to initial state."""
+    def reset(
+        self, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        """Reset the environment to initial state.
+
+        Returns:
+            A tuple of (observations, infos) dictionaries for all agents.
+        """
         del options  # Unused
 
         if seed is not None:
@@ -410,7 +412,6 @@ class SpatialCompetitionEnv(AECEnv):
         )
 
         # Initialize rewards, terminations, truncations, infos
-        self.rewards = dict.fromkeys(self.agents, 0.0)
         self._cumulative_rewards = dict.fromkeys(self.agents, 0.0)
         self.terminations = dict.fromkeys(self.agents, False)
         self.truncations = dict.fromkeys(self.agents, False)
@@ -421,11 +422,13 @@ class SpatialCompetitionEnv(AECEnv):
             agent: self.competition.get_agent_observation(agent).get_observation() for agent in self.agents
         }
 
-        # Initialize agent selector for turn-based play
-        self._agent_selector = AgentSelector(self.rng.permutation(self.agents))
-        self.agent_selection = self._agent_selector.reset()
-
         self._renderer = PygameRenderer(self.competition, self.max_env_steps)
+
+        # Set up render callback for human mode to show intermediate states during step
+        if self.render_mode == "human":
+            self.competition.render_callback = self._render_step_phase
+
+        return self.observations, self.infos
 
     def _build_infos(self) -> dict[str, dict[str, Any]]:
         """Build info dicts for all agents with useful state information."""
@@ -444,74 +447,77 @@ class SpatialCompetitionEnv(AECEnv):
             }
         return infos
 
-    def observe(self, agent: str) -> dict[str, Any]:
-        """Get observation for the specified agent."""
-        return self.observations[agent]
+    def step(
+        self, actions: dict[str, dict[str, Any]]
+    ) -> tuple[
+        dict[str, dict[str, Any]],
+        dict[str, float],
+        dict[str, bool],
+        dict[str, bool],
+        dict[str, dict[str, Any]],
+    ]:
+        """Execute one step of the environment with all agents acting simultaneously.
 
-    def step(self, action: np.ndarray) -> None:
-        """Execute one step of the environment."""
+        Args:
+            actions: Dictionary mapping agent IDs to their actions.
+                     Each action contains: movement, price, and optionally quality.
+
+        Returns:
+            A tuple of (observations, rewards, terminations, truncations, infos).
+        """
         assert self.competition is not None
 
-        if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
-            self.agents.remove(self.agent_selection)
-            self._next_agent()
-            return
+        actions_dict: dict[str, Action] = {}
 
-        if self._agent_selector.is_first():
-            self.competition.start_cycle()
+        for agent in self.agents:
+            if self.terminations.get(agent, False) or self.truncations.get(agent, False):
+                continue
 
-        agent = self.agent_selection
+            action = actions.get(agent)
+            if action is None:
+                continue
 
-        # Parse action: [movement, price, quality (optional)]
-        movement = Position(
-            space_coordinates=np.array(action["movement"], dtype=np.float32),
-            space_resolution=self.space_resolution,
-            topology=self.topology,
-            round_with_warning=True,
-        )
-        new_price = float(action["price"])
-
-        # Clip movement and price to valid ranges
-        movement = movement.clip_norm(self.max_step_size)
-        new_price = float(np.clip(new_price, 0.0, self.max_price))
-
-        # Quality is optional - only parse if include_quality is True
-        new_quality: float | None = None
-        if self.include_quality:
-            new_quality = float(action["quality"])
-            new_quality = float(np.clip(new_quality, 0.0, self.max_quality))
-
-        self.competition.agent_step(agent, movement, new_price, new_quality)
-
-        # Update observations
-        self.observations[agent] = self.competition.get_agent_observation(agent).get_observation()
-
-        # Process market interactions if all agents have acted (end of cycle)
-        if self._agent_selector.is_last():
-            self.competition.end_cycle()
-            self.rewards = {agent: self.competition.compute_agent_reward(agent) for agent in self.agents}
-            self.infos = self._build_infos()
-            self._accumulate_rewards()
-            self._agent_selector.reinit(self.rng.permutation(self.agents))
-
-            # Increment step count after full cycle and check truncation
-            self.num_steps += 1
-            if self.num_steps >= self.max_env_steps:
-                self.truncations = dict.fromkeys(self.agents, True)
-
-        self._next_agent()
-
-        # Render and wait if in human mode (handles pause, speed, and keeps UI responsive)
-        if self.render_mode == "human" and self._renderer is not None:
-            self._renderer.render_and_wait(
-                base_delay=self.step_delay,
-                current_step=self.num_steps,
-                cumulative_rewards=self._cumulative_rewards,
+            movement = Position(
+                space_coordinates=np.array(action["movement"], dtype=np.float32),
+                space_resolution=self.space_resolution,
+                topology=self.topology,
+                round_with_warning=True,
             )
+            movement = movement.clip_norm(self.max_step_size)
 
-    def _next_agent(self) -> None:
-        """Advance to the next agent in the turn order."""
-        self.agent_selection = self._agent_selector.next()
+            new_price = float(action["price"])
+            new_price = float(np.clip(new_price, 0.0, self.max_price))
+
+            new_quality: float | None = None
+            if self.include_quality:
+                new_quality = float(action["quality"])
+                new_quality = float(np.clip(new_quality, 0.0, self.max_quality))
+
+            actions_dict[agent] = Action(movement, new_price, new_quality)
+
+        self.competition.step(actions_dict)
+
+        rewards = {agent: self.competition.compute_agent_reward(agent) for agent in self.agents}
+        for agent, reward in rewards.items():
+            self._cumulative_rewards[agent] += reward
+
+        self.observations = {
+            agent: self.competition.get_agent_observation(agent).get_observation() for agent in self.agents
+        }
+
+        self.infos = self._build_infos()
+
+        self.num_steps += 1
+        if self.num_steps >= self.max_env_steps:
+            self.truncations = dict.fromkeys(self.agents, True)
+
+        self.agents = [
+            agent
+            for agent in self.agents
+            if not self.terminations.get(agent, False) and not self.truncations.get(agent, False)
+        ]
+
+        return self.observations, rewards, self.terminations, self.truncations, self.infos
 
     def render(self) -> None:
         """Render the environment using Pygame (called automatically in human mode)."""
@@ -526,6 +532,17 @@ class SpatialCompetitionEnv(AECEnv):
             return
 
         self._renderer.render(
+            current_step=self.num_steps,
+            cumulative_rewards=self._cumulative_rewards,
+        )
+
+    def _render_step_phase(self) -> None:
+        """Render an intermediate phase during a step (used by Competition callback)."""
+        if self._renderer is None:
+            return
+
+        self._renderer.render_and_wait(
+            base_delay=self.render_phase_delay,
             current_step=self.num_steps,
             cumulative_rewards=self._cumulative_rewards,
         )

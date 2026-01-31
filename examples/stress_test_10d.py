@@ -163,11 +163,10 @@ The 10D space cannot be visualized, but you can see:
         ),
         max_env_steps=num_cycles,
         render_mode="human",
-        step_delay=0.05,  # Fast by default
     )
 
     print("Resetting environment...")
-    environment.reset(seed=seed)
+    observations, _ = environment.reset(seed=seed)
 
     # Create policies for each seller
     print(f"Creating {num_sellers} policies...")
@@ -187,34 +186,31 @@ The 10D space cannot be visualized, but you can see:
     print("TIP: Drag the speed slider all the way right for MAX speed!")
     print("-" * 70)
 
-    # Track cycle progress
-    cycle_count = 0
-    agents_acted_this_cycle = 0
+    # Track rewards for policy updates
+    rewards: dict[str, float] = dict.fromkeys(environment.possible_agents, 0.0)
     running = True
 
     try:
-        # Main simulation loop
-        for agent in environment.agent_iter():
+        # Main simulation loop - parallel stepping
+        for cycle_count in range(1, num_cycles + 1):
             if not running:
                 break
 
-            # Get current state
-            observation, reward, termination, truncation, _ = environment.last()
+            # Collect actions from all agents
+            actions = {}
+            for agent in environment.agents:
+                actions[agent] = policies[agent].compute_action(observations[agent], rewards[agent])
 
-            # Get action (None if episode is done)
-            action = None if termination or truncation else policies[agent].compute_action(observation, reward)
+            # Step all agents simultaneously
+            observations, rewards, terminations, truncations, _ = environment.step(actions)
 
-            environment.step(action)
+            # Check if all agents are done
+            if all(terminations.values()) or all(truncations.values()):
+                break
 
-            # Track cycles
-            agents_acted_this_cycle += 1
-            if agents_acted_this_cycle >= len(environment.possible_agents):
-                agents_acted_this_cycle = 0
-                cycle_count += 1
-
-                # Print progress every 50 cycles
-                if cycle_count % 50 == 0:
-                    print(f"Cycle {cycle_count}/{num_cycles} completed")
+            # Print progress every 50 cycles
+            if cycle_count % 50 == 0:
+                print(f"Cycle {cycle_count}/{num_cycles} completed")
 
     except KeyboardInterrupt:
         print("\nSimulation interrupted by user.")
