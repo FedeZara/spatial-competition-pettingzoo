@@ -298,9 +298,8 @@ class PygameRenderer:
         elif dimensions == 2:
             self._render_2d(width, height, margin)
         else:
-            # For dimensions > 2, show a message
-            text = self._font.render(f"Rendering not supported for {dimensions}D environments", True, (200, 200, 200))
-            self._screen.blit(text, (width // 2 - text.get_width() // 2, height // 2))
+            # For dimensions > 2, show stats in the main area
+            self._render_high_dim(width, height, margin, dimensions)
 
         # Draw UI controls
         self._draw_controls(width, current_step)
@@ -309,7 +308,7 @@ class PygameRenderer:
         self._draw_leaderboard(width, height, margin)
 
         # Clear selection if entity no longer exists (but keep hover until mouse moves)
-        if self._selected_entity and self._find_entity_screen_pos(self._selected_entity) is None:
+        if self._selected_entity and not self._entity_exists(self._selected_entity):
             self._selected_entity = None
 
         # Draw highlight around hovered entity (only if entity still exists)
@@ -568,6 +567,99 @@ class PygameRenderer:
             price_label = self._font.render(info_text, True, (200, 200, 200))
             self._screen.blit(price_label, (screen_x + 15, screen_y - 10))
 
+    def _render_high_dim(self, width: int, height: int, margin: int, dimensions: int) -> None:
+        """Render high-dimensional environment (>2D) with stats display."""
+        assert self._screen is not None
+        assert self._font is not None
+        assert self._small_font is not None
+
+        # Left margin for leaderboard
+        legend_width = 220
+        content_x = legend_width + margin
+        content_width = width - legend_width - 2 * margin
+
+        # Title
+        title = self._font.render(f"🌀 {dimensions}D Spatial Competition", True, (200, 200, 200))
+        self._screen.blit(title, (content_x + (content_width - title.get_width()) // 2, 60))
+
+        subtitle = self._small_font.render(
+            "(Space cannot be visualized - see leaderboard for rankings)", True, (120, 120, 140)
+        )
+        self._screen.blit(subtitle, (content_x + (content_width - subtitle.get_width()) // 2, 85))
+
+        # Draw stats boxes
+        box_y = 120
+        box_width = min(300, content_width - 40)
+        box_x = content_x + (content_width - box_width) // 2
+
+        # Competition stats
+        num_sellers = len(self._competition.space.sellers)
+        num_buyers = len(self._competition.space.buyers)
+        total_sales = sum(s.total_sales for s in self._competition.space.sellers)
+        total_reward = sum(self._cumulative_rewards.values()) if self._cumulative_rewards else 0
+
+        stats = [
+            ("Dimensions", str(dimensions)),
+            ("Active Sellers", str(num_sellers)),
+            ("Active Buyers", str(num_buyers)),
+            ("Total Sales", str(total_sales)),
+            ("Total Reward", f"{total_reward:.1f}"),
+        ]
+
+        # Draw stats box background
+        box_height = len(stats) * 28 + 20
+        pygame.draw.rect(self._screen, (35, 35, 50), (box_x, box_y, box_width, box_height), border_radius=8)
+        pygame.draw.rect(self._screen, (60, 60, 80), (box_x, box_y, box_width, box_height), 2, border_radius=8)
+
+        # Draw stats
+        for i, (label, value) in enumerate(stats):
+            y = box_y + 12 + i * 28
+            label_text = self._font.render(label, True, (150, 150, 170))
+            value_text = self._font.render(value, True, (200, 200, 220))
+            self._screen.blit(label_text, (box_x + 15, y))
+            self._screen.blit(value_text, (box_x + box_width - value_text.get_width() - 15, y))
+
+        # Top 5 sellers summary (quick view)
+        top_sellers_y = box_y + box_height + 30
+        top_label = self._font.render("Quick Stats - Top 5 Sellers:", True, (180, 180, 200))
+        self._screen.blit(top_label, (box_x, top_sellers_y))
+
+        # Sort sellers by cumulative reward
+        if self._cumulative_rewards:
+            sorted_sellers = sorted(
+                self._competition.space.sellers,
+                key=lambda s: self._cumulative_rewards.get(s.agent_id, 0),
+                reverse=True,
+            )[:5]
+
+            for i, seller in enumerate(sorted_sellers):
+                y = top_sellers_y + 25 + i * 22
+                idx = self._competition.space.sellers.index(seller)
+                color = self._seller_colors[idx % len(self._seller_colors)]
+                reward = self._cumulative_rewards.get(seller.agent_id, 0)
+
+                # Color dot
+                pygame.draw.circle(self._screen, color, (box_x + 10, y + 6), 5)
+
+                # Seller info
+                info = f"{seller.agent_id}: {reward:.0f} pts, {seller.total_sales} sales"
+                if self._competition.include_quality:
+                    info += f", q={seller.quality:.1f}"
+                text = self._small_font.render(info, True, (160, 160, 180))
+                self._screen.blit(text, (box_x + 25, y))
+
+        # Hint at bottom
+        hint = self._small_font.render("Click leaderboard items for details", True, (100, 100, 120))
+        self._screen.blit(hint, (content_x + (content_width - hint.get_width()) // 2, height - 40))
+
+    def _format_position(self, coords: np.ndarray, precision: int = 2) -> str | None:
+        """Format position coordinates. Returns None if dimensions > 3."""
+        dims = len(coords)
+        if dims > 3:
+            return None
+        formatted = ", ".join(f"{c:.{precision}f}" for c in coords)
+        return f"({formatted})"
+
     def _draw_tooltip(self, entity_info: EntityInfo) -> None:
         """Draw a tooltip near the hovered entity."""
         assert self._screen is not None
@@ -578,9 +670,9 @@ class PygameRenderer:
         if entity_info.entity_type == "seller":
             seller: Seller = entity_info.entity  # type: ignore[assignment]
             lines.append(f"{seller.agent_id}")
-            lines.append(
-                f"Position: ({seller.position.space_coordinates[0]:.2f}, {seller.position.space_coordinates[1] if len(seller.position.space_coordinates) > 1 else 0:.2f})"
-            )
+            pos_str = self._format_position(seller.position.space_coordinates)
+            if pos_str:
+                lines.append(f"Position: {pos_str}")
             lines.append(f"Price: {seller.price:.2f}")
             if self._competition.include_quality:
                 lines.append(f"Quality: {seller.quality:.2f}")
@@ -588,8 +680,9 @@ class PygameRenderer:
         else:
             buyer: Buyer = entity_info.entity  # type: ignore[assignment]
             lines.append("Buyer")
-            pos = buyer.position.space_coordinates
-            lines.append(f"Position: ({pos[0]:.2f}, {pos[1] if len(pos) > 1 else 0:.2f})")
+            pos_str = self._format_position(buyer.position.space_coordinates)
+            if pos_str:
+                lines.append(f"Position: {pos_str}")
             if buyer.value is not None:
                 lines.append(f"Value: {buyer.value:.2f}")
             if self._competition.include_quality:
@@ -631,6 +724,12 @@ class PygameRenderer:
                     return (x, y)
         return None
 
+    def _entity_exists(self, entity_info: EntityInfo) -> bool:
+        """Check if an entity still exists in the competition."""
+        if entity_info.entity_type == "seller":
+            return entity_info.entity in self._competition.space.sellers
+        return entity_info.entity in self._competition.space.buyers
+
     def _draw_detail_panel(self, entity_info: EntityInfo) -> None:
         """Draw a detailed info panel for the selected entity."""
         assert self._screen is not None
@@ -642,8 +741,9 @@ class PygameRenderer:
             seller: Seller = entity_info.entity  # type: ignore[assignment]
             lines.append(f"=== {seller.agent_id} ===")
             lines.append("")
-            pos = seller.position.space_coordinates
-            lines.append(f"Position: ({pos[0]:.3f}, {pos[1] if len(pos) > 1 else 0:.3f})")
+            pos_str = self._format_position(seller.position.space_coordinates, precision=3)
+            if pos_str:
+                lines.append(f"Position: {pos_str}")
             lines.append(f"Price: {seller.price:.3f}")
             if self._competition.include_quality:
                 lines.append(f"Quality: {seller.quality:.3f}")
@@ -656,8 +756,9 @@ class PygameRenderer:
             buyer: Buyer = entity_info.entity  # type: ignore[assignment]
             lines.append("=== Buyer ===")
             lines.append("")
-            pos = buyer.position.space_coordinates
-            lines.append(f"Position: ({pos[0]:.3f}, {pos[1] if len(pos) > 1 else 0:.3f})")
+            pos_str = self._format_position(buyer.position.space_coordinates, precision=3)
+            if pos_str:
+                lines.append(f"Position: {pos_str}")
             if buyer.value is not None:
                 lines.append(f"Value: {buyer.value:.3f}")
             if self._competition.include_quality:
