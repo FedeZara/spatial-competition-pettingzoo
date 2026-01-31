@@ -23,6 +23,7 @@ from spatial_competition_pettingzoo.distributions import (
 from spatial_competition_pettingzoo.enums import InformationLevel
 from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
+from spatial_competition_pettingzoo.renderer import PygameRenderer
 from spatial_competition_pettingzoo.topology import Topology
 from spatial_competition_pettingzoo.view_scope import (
     CompleteViewScope,
@@ -57,11 +58,13 @@ def env(
     seller_quality_distr: DistributionProtocol | None = None,
     new_buyers_per_step: int = 50,
     buyer_position_distr: MultivariateDistributionProtocol | None = None,
+    include_buyer_valuation: bool = False,
     buyer_valuation_distr: DistributionProtocol | None = None,
     buyer_quality_taste_distr: DistributionProtocol | None = None,
     buyer_distance_factor_distr: DistributionProtocol | None = None,
     max_env_steps: int = 100,
     render_mode: str | None = None,
+    step_delay: float = 0.1,
 ) -> wrappers.OrderEnforcingWrapper:
     """Create a new spatial competition environment."""
     return wrappers.OrderEnforcingWrapper(
@@ -85,11 +88,13 @@ def env(
                 seller_quality_distr=seller_quality_distr,
                 new_buyers_per_step=new_buyers_per_step,
                 buyer_position_distr=buyer_position_distr,
+                include_buyer_valuation=include_buyer_valuation,
                 buyer_valuation_distr=buyer_valuation_distr,
                 buyer_quality_taste_distr=buyer_quality_taste_distr,
                 buyer_distance_factor_distr=buyer_distance_factor_distr,
                 max_env_steps=max_env_steps,
                 render_mode=render_mode,
+                step_delay=step_delay,
             )
         )
     )
@@ -115,11 +120,13 @@ def raw_env(
     seller_quality_distr: DistributionProtocol | None = None,
     new_buyers_per_step: int = 50,
     buyer_position_distr: MultivariateDistributionProtocol | None = None,
+    include_buyer_valuation: bool = False,
     buyer_valuation_distr: DistributionProtocol | None = None,
     buyer_quality_taste_distr: DistributionProtocol | None = None,
     buyer_distance_factor_distr: DistributionProtocol | None = None,
     max_env_steps: int = 100,
     render_mode: str | None = None,
+    step_delay: float = 0.1,
 ) -> SpatialCompetitionEnv:
     """Create a raw spatial competition environment."""
     return SpatialCompetitionEnv(
@@ -141,11 +148,13 @@ def raw_env(
         seller_quality_distr=seller_quality_distr,
         new_buyers_per_step=new_buyers_per_step,
         buyer_position_distr=buyer_position_distr,
+        include_buyer_valuation=include_buyer_valuation,
         buyer_valuation_distr=buyer_valuation_distr,
         buyer_quality_taste_distr=buyer_quality_taste_distr,
         buyer_distance_factor_distr=buyer_distance_factor_distr,
         max_env_steps=max_env_steps,
         render_mode=render_mode,
+        step_delay=step_delay,
     )
 
 
@@ -184,11 +193,13 @@ class SpatialCompetitionEnv(AECEnv):
         seller_quality_distr: DistributionProtocol | None = None,
         new_buyers_per_step: int = 50,
         buyer_position_distr: MultivariateDistributionProtocol | None = None,
+        include_buyer_valuation: bool = False,
         buyer_valuation_distr: DistributionProtocol | None = None,
         buyer_quality_taste_distr: DistributionProtocol | None = None,
         buyer_distance_factor_distr: DistributionProtocol | None = None,
         max_env_steps: int = 10000,
         render_mode: str | None = None,
+        step_delay: float = 0.1,
     ) -> None:
         """
         Initialize the spatial competition environment.
@@ -217,14 +228,18 @@ class SpatialCompetitionEnv(AECEnv):
             new_buyers_per_step: Number of new buyers to spawn each environment step
             buyer_position_distr: Multivariate distribution for buyer positions.
                 Defaults to multivariate uniform distribution in the unit hypercube.
+            include_buyer_valuation: Whether buyers have finite valuations.
+                If False, buyers always buy if utility > 0 (valuation = +inf).
+                If True, buyers have finite valuations from buyer_valuation_distr.
             buyer_valuation_distr: Distribution for buyer valuations.
-                Defaults to constant +inf.
+                Only used if include_buyer_valuation is True. Defaults to max_price * 2.
             buyer_quality_taste_distr: Distribution for buyer quality taste (k_b).
                 Defaults to constant 1.
             buyer_distance_factor_distr: Distribution for buyer distance factor.
                 Defaults to constant 1.
             max_env_steps: Maximum number of full environment cycles (each cycle = all agents act once)
             render_mode: Rendering mode
+            step_delay: Base delay between steps in seconds (adjusted by speed multiplier)
 
         """
         super().__init__()
@@ -241,27 +256,36 @@ class SpatialCompetitionEnv(AECEnv):
         self.movement_cost = movement_cost
         self.new_buyers_per_step = new_buyers_per_step
 
-        # Seller distribution parameters
+        # Position and price paramters
         self.seller_position_distr = seller_position_distr or MultivariateUniformDistribution(
             dim=dimensions, loc=0.0, scale=1 - 1 / space_resolution
         )
-        self.seller_price_distr = seller_price_distr or ConstantUnivariateDistribution(max_price / 2)
-        self.seller_quality_distr = seller_quality_distr or ConstantUnivariateDistribution(max_quality / 2)
-
-        # Buyer distribution parameters
         self.buyer_position_distr = buyer_position_distr or MultivariateUniformDistribution(
             dim=dimensions, loc=0.0, scale=1 - 1 / space_resolution
         )
-        self.buyer_valuation_distr = buyer_valuation_distr or ConstantUnivariateDistribution(np.inf)
-        self.buyer_quality_taste_distr = buyer_quality_taste_distr or ConstantUnivariateDistribution(1)
         self.buyer_distance_factor_distr = buyer_distance_factor_distr or ConstantUnivariateDistribution(1)
+        self.seller_price_distr = seller_price_distr or ConstantUnivariateDistribution(max_price / 2)
+
+        # Valuation parameters
+        self.include_buyer_valuation = include_buyer_valuation
+        self.buyer_valuation_distr = None
+        if self.include_buyer_valuation:
+            self.buyer_valuation_distr = buyer_valuation_distr or ConstantUnivariateDistribution(max_price * 2)
+
+        # Quality parameters
+        self.include_quality = include_quality
+        self.seller_quality_distr = None
+        self.buyer_quality_taste_distr = None
+        if self.include_quality:
+            self.seller_quality_distr = seller_quality_distr or ConstantUnivariateDistribution(max_quality / 2)
+            self.buyer_quality_taste_distr = buyer_quality_taste_distr or ConstantUnivariateDistribution(1)
         self.max_step_size = max_step_size
         self.space_resolution = space_resolution
 
         # Environment parameters
         self.max_env_steps = max_env_steps
         self.render_mode = render_mode
-        self.include_quality = include_quality
+        self.step_delay = step_delay
 
         # Information level parameters
         self.information_level = information_level
@@ -290,6 +314,8 @@ class SpatialCompetitionEnv(AECEnv):
         self.rng = np.random.default_rng()
 
         self.competition: Competition | None = None
+        self._renderer: PygameRenderer | None = None
+
         self.reset()
 
     def _setup_action_space(self) -> None:
@@ -362,6 +388,8 @@ class SpatialCompetitionEnv(AECEnv):
             max_step_size=self.max_step_size,
             production_cost_factor=self.production_cost_factor,
             movement_cost=self.movement_cost,
+            include_quality=self.include_quality,
+            include_buyer_valuation=self.include_buyer_valuation,
             seller_position_distr=self.seller_position_distr,
             seller_price_distr=self.seller_price_distr,
             seller_quality_distr=self.seller_quality_distr,
@@ -388,6 +416,8 @@ class SpatialCompetitionEnv(AECEnv):
         # Initialize agent selector for turn-based play
         self._agent_selector = AgentSelector(self.rng.permutation(self.agents))
         self.agent_selection = self._agent_selector.reset()
+
+        self._renderer = PygameRenderer(self.competition, self.max_env_steps)
 
     def _build_infos(self) -> dict[str, dict[str, Any]]:
         """Build info dicts for all agents with useful state information."""
@@ -419,6 +449,9 @@ class SpatialCompetitionEnv(AECEnv):
             self._next_agent()
             return
 
+        if self._agent_selector.is_first():
+            self.competition.start_cycle()
+
         agent = self.agent_selection
 
         # Parse action: [movement, price, quality (optional)]
@@ -447,7 +480,7 @@ class SpatialCompetitionEnv(AECEnv):
 
         # Process market interactions if all agents have acted (end of cycle)
         if self._agent_selector.is_last():
-            self.competition.env_step()
+            self.competition.end_cycle()
             self.rewards = {agent: self.competition.compute_agent_reward(agent) for agent in self.agents}
             self.infos = self._build_infos()
             self._accumulate_rewards()
@@ -460,12 +493,36 @@ class SpatialCompetitionEnv(AECEnv):
 
         self._next_agent()
 
+        # Render and wait if in human mode (handles pause, speed, and keeps UI responsive)
+        if self.render_mode == "human" and self._renderer is not None:
+            self._renderer.render_and_wait(
+                base_delay=self.step_delay,
+                current_step=self.num_steps,
+                cumulative_rewards=self._cumulative_rewards,
+            )
+
     def _next_agent(self) -> None:
         """Advance to the next agent in the turn order."""
         self.agent_selection = self._agent_selector.next()
 
     def render(self) -> None:
-        """Render the environment (placeholder implementation)."""
+        """Render the environment using Pygame (called automatically in human mode)."""
+        self._render()
+
+    def _render(self) -> None:
+        """Internal render method."""
+        if self.render_mode != "human":
+            return
+
+        if self._renderer is None:
+            return
+
+        self._renderer.render(
+            current_step=self.num_steps,
+            cumulative_rewards=self._cumulative_rewards,
+        )
 
     def close(self) -> None:
-        """Close the environment."""
+        """Close the environment and cleanup resources."""
+        if self._renderer is not None:
+            self._renderer.close()

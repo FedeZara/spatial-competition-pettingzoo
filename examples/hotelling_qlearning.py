@@ -17,8 +17,6 @@ Action Space (discretized):
 Reference: Hotelling, H. (1929). "Stability in Competition." The Economic Journal.
 """
 
-# ruff: noqa: T201
-
 from __future__ import annotations
 
 from typing import Any
@@ -292,7 +290,6 @@ def run_qlearning_simulation(
         seller_quality_distr=ConstantUnivariateDistribution(0.0),
         new_buyers_per_step=new_buyers_per_step,
         buyer_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
-        buyer_valuation_distr=ConstantUnivariateDistribution(np.inf),
         buyer_quality_taste_distr=ConstantUnivariateDistribution(0.0),
         buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
         max_env_steps=steps_per_episode,
@@ -342,7 +339,6 @@ def run_qlearning_simulation(
             seller_quality_distr=ConstantUnivariateDistribution(0.0),
             new_buyers_per_step=new_buyers_per_step,
             buyer_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
-            buyer_valuation_distr=ConstantUnivariateDistribution(np.inf),
             buyer_quality_taste_distr=ConstantUnivariateDistribution(0.0),
             buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
             max_env_steps=steps_per_episode,
@@ -474,7 +470,6 @@ def evaluate_agents(
             seller_quality_distr=ConstantUnivariateDistribution(0.0),
             new_buyers_per_step=new_buyers_per_step,
             buyer_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
-            buyer_valuation_distr=ConstantUnivariateDistribution(np.inf),
             buyer_quality_taste_distr=ConstantUnivariateDistribution(0.0),
             buyer_distance_factor_distr=ConstantUnivariateDistribution(transport_cost),
             max_env_steps=steps_per_episode,

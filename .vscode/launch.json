@@ -10,7 +10,23 @@
             "request": "launch",
             "program": "examples/hotelling_qlearning.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
+        },
+        {
+            "name": "Hotelling Random",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/hotelling_random.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Spatial Competition 2D",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/spatial_competition_2d.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }

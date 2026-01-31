@@ -17,6 +17,7 @@ scipy = [
     { version = ">=1.15.0,<2.0.0", python = ">=3.11" },
     { version = "<1.15.0", python = "3.10" },
 ]
+pygame = "^2.6.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = ">=0.13.1,<0.14.0"
@@ -41,37 +42,10 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["ALL"]
+select = ["F", "E", "I"]
 ignore = [
-    "COM812",  # trailing comma missing (conflicts with formatter)
-    "COM819",  # trailing comma prohibited (conflicts with formatter)
-    "D100",    # ignore missing docs
-    "D101",
-    "D102",
-    "D103",
-    "D104",
-    "D105",
-    "D106",
-    "D107",
-    "D200",
-    "D203",    # blank line before class docstring (conflicts with D211)
-    "D205",
-    "D212",
-    "D400",
-    "D401",
-    "D415",
-    "E402",    # false positives for local imports
-    "E501",    # line too long
-    "S101",    # assert statements in tests are fine
-    "TRY003",  # external messages in exceptions are too verbose
-    "TD002",
-    "TD003",
-    "FBT001",
-    "FBT002",
-    "FBT003",
-    "FIX002",  # too verbose descriptions of todos
-    "PLR0913", # too many arguments in function (more than 10)
-    "PLR2004", # magic values are fine
+    "E402", # false positives for local imports
+    "E501", # line too long
 ]
 
 [tool.isort]
@@ -88,7 +62,7 @@ warn_unused_ignores = true
 
 # Ignore missing imports for libraries without type stubs
 [[tool.mypy.overrides]]
-module = ["pettingzoo.*", "matplotlib.*"]
+module = ["pettingzoo.*", "matplotlib.*", "pygame.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
