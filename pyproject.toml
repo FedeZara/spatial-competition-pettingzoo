@@ -1,9 +1,17 @@
 [project]
 name = "spatial-competition-pettingzoo"
 version = "0.1.0"
-description = ""
+description = "Spatial Competition PettingZoo Environment"
 authors = [{ name = "FedeZara", email = "fedezara2001@gmail.com" }]
 readme = "README.md"
+license = { file = "LICENSE" }
+keywords = [
+    "spatial competition",
+    "pettingzoo",
+    "environment",
+    "multi-agent",
+    "simulation",
+]
 
 [tool.poetry]
 packages = [{ include = "spatial_competition_pettingzoo" }]

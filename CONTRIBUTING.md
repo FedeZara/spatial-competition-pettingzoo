@@ -4,9 +4,9 @@ Thank you for your interest in contributing to this project!
 
 ## Development Setup
 
-1. **Install Poetry** (if you haven't already):
+1. **Install mise** (if you haven't already):
    ```bash
-   curl -sSL https://install.python-poetry.org | python3 -
+   curl https://mise.run | sh
    ```
 
 2. **Clone the repository**:
@@ -15,37 +15,45 @@ Thank you for your interest in contributing to this project!
    cd spatial-competition-pettingzoo
    ```
 
-3. **Install dependencies**:
+3. **Activate mise** (installs Poetry automatically):
    ```bash
-   make dev-install
-   # or manually: poetry install --with dev
+   mise trust
+   mise install
    ```
 
-4. **Install pre-commit hooks**:
+4. **Install dependencies**:
    ```bash
-   make pre-commit
-   # or manually: poetry run pre-commit install
+   mise run dev-install
+   ```
+
+5. **Install pre-commit hooks**:
+   ```bash
+   mise run pre-commit
    ```
 
 ## Development Workflow
 
 1. **Run all checks**:
    ```bash
-   make check  # runs linting, type checking, and tests
+   mise run check  # runs linting, type checking, and tests
    ```
 
 2. **Individual commands**:
    ```bash
-   make lint        # Check code style
-   make format      # Format code
-   make type-check  # Run mypy
-   make test        # Run tests
-   make test-cov    # Run tests with coverage
+   mise run lint        # Check code style
+   mise run format      # Format code
+   mise run type-check  # Run mypy
+   mise run test        # Run tests
    ```
 
 3. **Clean up**:
    ```bash
-   make clean  # Remove cache files
+   mise run clean  # Remove cache files
+   ```
+
+4. **List all available tasks**:
+   ```bash
+   mise tasks
    ```
 
 ## Code Standards
@@ -61,7 +69,7 @@ Thank you for your interest in contributing to this project!
 1. Fork the repository
 2. Create a feature branch from `main`
 3. Make your changes
-4. Ensure all tests pass (`make check`)
+4. Ensure all tests pass (`mise run check`)
 5. Commit your changes (pre-commit hooks will run)
 6. Push to your fork and submit a pull request
 
