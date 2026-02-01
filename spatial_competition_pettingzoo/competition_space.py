@@ -171,31 +171,31 @@ class CompetitionSpace:
         """Return the total number of cells in the competition space."""
         return int(self._space_resolution**self._dimensions)
 
-    @property
-    def num_occupied_cells(self) -> int:
-        """Return the number of occupied cells in the competition space."""
-        return len(self._buyers) + len(self._sellers_dict)
+    def _build_seller_positions_set(self) -> set[Position]:
+        """Build a set of all seller positions for efficient lookup."""
+        return {seller.position for seller in self._sellers_dict.values()}
 
-    @property
-    def num_free_cells(self) -> int:
-        """Return the number of free cells in the competition space."""
-        return self.num_cells - self.num_occupied_cells
+    def _build_buyer_positions_set(self) -> set[Position]:
+        """Build a set of all buyer positions for efficient lookup."""
+        return {buyer.position for buyer in self._buyers}
 
-    def sample_free_position(
-        self, distribution: MultivariateDistributionProtocol, rng: np.random.Generator
+    def _sample_position(
+        self,
+        distribution: MultivariateDistributionProtocol,
+        rng: np.random.Generator,
+        occupied_positions: set[Position],
     ) -> Position:
         """
-        Sample a free position from the competition space.
+        Sample a position that is not in the occupied positions set.
 
         Args:
             distribution: The distribution to sample from. It should be a multivariate distribution.
             rng: The random number generator to use.
+            occupied_positions: Set of positions that are considered occupied.
 
-        Returns: A free position from the competition space.
+        Returns: A position not in the occupied set.
 
         """
-        assert self.num_free_cells > 0
-
         position = None
         while position is None:
             sample = distribution.rvs(random_state=rng)
@@ -209,10 +209,48 @@ class CompetitionSpace:
                 tensor_coordinates=tensor_coordinates,
             )
 
-            if not self.is_position_free(position):
+            if position in occupied_positions:
                 position = None
 
         return position
+
+    def sample_position_for_seller(
+        self, distribution: MultivariateDistributionProtocol, rng: np.random.Generator
+    ) -> Position:
+        """
+        Sample a free position for a seller from the competition space.
+
+        Sellers cannot be placed on positions occupied by other sellers.
+
+        Args:
+            distribution: The distribution to sample from. It should be a multivariate distribution.
+            rng: The random number generator to use.
+
+        Returns: A position free of other sellers.
+
+        """
+        assert len(self._sellers_dict) < self.num_cells
+        occupied = self._build_seller_positions_set()
+        return self._sample_position(distribution, rng, occupied)
+
+    def sample_position_for_buyer(
+        self, distribution: MultivariateDistributionProtocol, rng: np.random.Generator
+    ) -> Position:
+        """
+        Sample a position for a buyer from the competition space.
+
+        Buyers can be placed on seller positions but not on other buyer positions.
+
+        Args:
+            distribution: The distribution to sample from. It should be a multivariate distribution.
+            rng: The random number generator to use.
+
+        Returns: A position free for a buyer (may overlap with sellers).
+
+        """
+        assert len(self._buyers) < self.num_cells
+        occupied = self._build_buyer_positions_set()
+        return self._sample_position(distribution, rng, occupied)
 
     def subspace(self, base: Position, extent: Position) -> CompetitionSpace:
         """Return a subspace of the competition space."""

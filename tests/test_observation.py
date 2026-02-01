@@ -33,9 +33,9 @@ class TestObservation:
         """Create sample arrays for observation components."""
         return {
             "local_view": np.array([[0, 1], [2, 3]], dtype=np.int8),
-            "buyers": np.array([[10.5, 15.2], [8.7, 12.3]], dtype=np.float32),
-            "sellers_price": np.array([[5.0, 7.5], [6.2, 9.1]], dtype=np.float32),
-            "sellers_quality": np.array([[0.8, 0.9], [0.7, 0.85]], dtype=np.float32),
+            "buyers": np.array([[10.5, 15.2], [8.7, 12.3]], dtype=np.float16),
+            "sellers_price": np.array([[5.0, 7.5], [6.2, 9.1]], dtype=np.float16),
+            "sellers_quality": np.array([[0.8, 0.9], [0.7, 0.85]], dtype=np.float16),
         }
 
     @pytest.fixture
@@ -177,7 +177,8 @@ class TestObservation:
         assert obs_space.spaces["own_position"].shape == (2,)
         assert obs_space.spaces["own_price"].high.item() == 10.0
         assert obs_space.spaces["own_quality"].high.item() == 1.0
-        assert obs_space.spaces["local_view"].shape == (9, 9)  # (2 * 4 + 1) for each dimension
+        # One-hot encoding: (channels, *spatial_dims) where channels = 3 (self, other_seller, buyer)
+        assert obs_space.spaces["local_view"].shape == (3, 9, 9)  # (3, 2 * 4 + 1, 2 * 4 + 1)
 
     def test_create_observation_space_limited_level(self) -> None:
         """Test create_observation_space with LIMITED information level."""
@@ -225,16 +226,30 @@ class TestObservation:
             sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(2), "seller_1"
         )
 
-        # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
-        expected = np.array(
+        # One-hot encoding: Channel 0 = self, Channel 1 = other seller, Channel 2 = buyer
+        # Shape: (3, 5, 5)
+        expected_self = np.array(
             [
-                [0, 0, 0, 3, 0],
+                [0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0],
                 [0, 0, 1, 0, 0],
-                [0, 0, 0, 3, 0],
                 [0, 0, 0, 0, 0],
-            ]
+                [0, 0, 0, 0, 0],
+            ],
+            dtype=np.uint8,
         )
+        expected_other_seller = np.zeros((5, 5), dtype=np.uint8)
+        expected_buyer = np.array(
+            [
+                [0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0],
+            ],
+            dtype=np.uint8,
+        )
+        expected = np.stack([expected_self, expected_other_seller, expected_buyer], axis=0)
 
         local_view = observation.get_observation()["local_view"]
         assert np.array_equal(local_view, expected)
@@ -247,7 +262,7 @@ class TestObservation:
             )
 
         # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
-        expected = np.full(shape=(5, 5), fill_value=Observation.NO_BUYER_PLACEHOLDER, dtype=np.float32)
+        expected = np.full(shape=(5, 5), fill_value=Observation.NO_BUYER_PLACEHOLDER, dtype=np.float16)
         expected[0, 3] = 15.0
         expected[3, 3] = 15.0
 
@@ -260,7 +275,7 @@ class TestObservation:
             sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(4), "seller_1"
         )
 
-        expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float32)
+        expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float16)
         expected[8, 8] = 7.5
 
         sellers_price_obs = observation.get_observation()["sellers_price"]
@@ -272,7 +287,7 @@ class TestObservation:
             sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(4), "seller_2"
         )
 
-        expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float32)
+        expected = np.full(shape=(9, 9), fill_value=Observation.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float16)
         expected[0, 0] = 0.8
 
         sellers_quality_obs = observation.get_observation()["sellers_quality"]
@@ -281,9 +296,9 @@ class TestObservation:
     def test_complete_observation_dict_keys_match_space_keys(self, sample_position: Position) -> None:
         """Test that observation dictionary keys match the observation space keys for COMPLETE information level."""
         local_view = np.array([[0, 1]], dtype=np.int8)
-        buyers = np.array([[10.5]], dtype=np.float32)
-        sellers_price = np.array([[5.0]], dtype=np.float32)
-        sellers_quality = np.array([[0.8]], dtype=np.float32)
+        buyers = np.array([[10.5]], dtype=np.float16)
+        sellers_price = np.array([[5.0]], dtype=np.float16)
+        sellers_quality = np.array([[0.8]], dtype=np.float16)
 
         observation = Observation(
             own_price=5.0,
@@ -312,7 +327,7 @@ class TestObservation:
     def test_limited_observation_dict_keys_match_space_keys(self, sample_position: Position) -> None:
         """Test that observation dictionary keys match the observation space keys for LIMITED information level."""
         local_view = np.array([[0, 1]], dtype=np.int8)
-        buyers = np.array([[10.5]], dtype=np.float32)
+        buyers = np.array([[10.5]], dtype=np.float16)
 
         observation = Observation(
             own_price=5.0,

@@ -633,20 +633,12 @@ class TestCompetitionSpace:
         """Test num_cells property."""
         assert sample_competition_space.num_cells == 100
 
-    def test_num_occupied_cells(self, sample_competition_space: CompetitionSpace) -> None:
-        """Test num_occupied_cells property."""
-        assert sample_competition_space.num_occupied_cells == 4
-
-    def test_num_free_cells(self, sample_competition_space: CompetitionSpace) -> None:
-        """Test num_free_cells property."""
-        assert sample_competition_space.num_free_cells == 96
-
-    def test_sample_free_position__uniform_distribution(
+    def test_sample_position_for_seller__uniform_distribution(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
     ) -> None:
-        sample_free_position = sample_competition_space.sample_free_position(
+        sample_free_position = sample_competition_space.sample_position_for_seller(
             MultivariateUniformDistribution(dim=2, loc=0.0, scale=1.0), mock_rng
         )
 
@@ -655,14 +647,14 @@ class TestCompetitionSpace:
         assert 0 <= sample_free_position.tensor_coordinates[1] < sample_competition_space.space_resolution
         assert sample_competition_space.is_position_free(sample_free_position)
 
-    def test_sample_free_position__multivariate_normal_distribution(
+    def test_sample_position_for_seller__multivariate_normal_distribution(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
     ) -> None:
         mean = np.array([0.5, 0.5])
         cov = np.array([[0.1, 0.0], [0.0, 0.1]])
-        sample_free_position = sample_competition_space.sample_free_position(
+        sample_free_position = sample_competition_space.sample_position_for_seller(
             MultivariateNormalDistribution(mean=mean, cov=cov), mock_rng
         )
 
@@ -671,7 +663,7 @@ class TestCompetitionSpace:
         assert 0 <= sample_free_position.tensor_coordinates[1] < sample_competition_space.space_resolution
         assert sample_competition_space.is_position_free(sample_free_position)
 
-    def test_sample_free_position__mock_distribution(
+    def test_sample_position_for_seller__mock_distribution(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
@@ -680,14 +672,14 @@ class TestCompetitionSpace:
         mock_pos_dist.rvs.side_effect = [np.array([0.5, 0.6])]
         mock_pos_dist.dim = 2
 
-        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        sample_free_position = sample_competition_space.sample_position_for_seller(mock_pos_dist, mock_rng)
         assert sample_free_position.tensor_coordinates.shape == (2,)
         assert sample_free_position.tensor_coordinates[0] == 5
         assert sample_free_position.tensor_coordinates[1] == 6
 
         mock_pos_dist.rvs.assert_has_calls([call(random_state=mock_rng)])
 
-    def test_sample_free_position__position_collision_handling(
+    def test_sample_position_for_seller__position_collision_handling(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
@@ -696,32 +688,32 @@ class TestCompetitionSpace:
         mock_pos_dist.rvs.side_effect = [np.array([0.3, 0.4]), np.array([0.5, 0.6])]
         mock_pos_dist.dim = 2
 
-        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        sample_free_position = sample_competition_space.sample_position_for_seller(mock_pos_dist, mock_rng)
         assert sample_free_position.tensor_coordinates.shape == (2,)
         assert sample_free_position.tensor_coordinates[0] == 5
         assert sample_free_position.tensor_coordinates[1] == 6
 
         mock_pos_dist.rvs.assert_has_calls([call(random_state=mock_rng), call(random_state=mock_rng)])
 
-    def test_sample_free_position__no_free_cells(
+    def test_sample_position_for_seller__no_free_cells(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
     ) -> None:
         mock_pos_dist = MagicMock()
-        mock_pos_dist.rvs.side_effect = [[0.3, 0.4], [0.5, 0.6]]
+        mock_pos_dist.rvs.side_effect = [np.array([0.3, 0.4]), np.array([0.5, 0.6])]
         mock_pos_dist.dim = 2
 
         with (
+            pytest.raises(AssertionError),
             patch(
-                "spatial_competition_pettingzoo.competition_space.CompetitionSpace.num_free_cells",
+                "spatial_competition_pettingzoo.competition_space.CompetitionSpace.num_cells",
                 new_callable=PropertyMock(return_value=0),
             ),
-            pytest.raises(AssertionError),
         ):
-            sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+            sample_competition_space.sample_position_for_seller(mock_pos_dist, mock_rng)
 
-    def test_sample_free_position__position_clipping(
+    def test_sample_position_for_seller__position_clipping(
         self,
         sample_competition_space: CompetitionSpace,
         mock_rng: np.random.Generator,
@@ -730,7 +722,7 @@ class TestCompetitionSpace:
         mock_pos_dist.rvs.side_effect = [np.array([-0.1, 1.2])]
         mock_pos_dist.dim = 2
 
-        sample_free_position = sample_competition_space.sample_free_position(mock_pos_dist, mock_rng)
+        sample_free_position = sample_competition_space.sample_position_for_seller(mock_pos_dist, mock_rng)
         assert sample_free_position.tensor_coordinates.shape == (2,)
         assert sample_free_position.tensor_coordinates[0] == 0
         assert sample_free_position.tensor_coordinates[1] == 9

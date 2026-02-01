@@ -95,7 +95,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
 
         # Values for seller spawning (3 sellers: price, quality each)
         seller_values = [5.0, 2.5, 4.0, 3.0, 6.0, 1.5]
@@ -142,7 +142,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_seller = Mock()
@@ -180,7 +180,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
 
         mock_seller = Mock()
         mock_seller_position = Mock()
@@ -219,7 +219,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_sample_clip.return_value = 1.0
 
         mock_position = Mock()
@@ -246,7 +246,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_sample_clip.return_value = 1.0
 
         mock_position = Mock()
@@ -273,7 +273,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_sample_clip.return_value = 1.0
 
         mock_position = Mock()
@@ -301,7 +301,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         # Setup sellers
@@ -363,7 +363,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_seller = Mock()
@@ -406,7 +406,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         # Track processing order
@@ -462,7 +462,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
 
         mock_seller = Mock()
         mock_seller.step_reward.return_value = 42.0
@@ -495,7 +495,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
 
         mock_observation = Mock()
         mock_observation_class.build_from_competition_space.return_value = mock_observation
@@ -532,8 +532,8 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_position = Mock()
-        mock_space.sample_free_position.return_value = mock_position
-        mock_space.num_free_cells = 10
+        mock_space.sample_position_for_seller.return_value = mock_position
+        mock_space.num_cells = 10
 
         mock_seller = Mock()
         mock_seller_class.return_value = mock_seller
@@ -574,13 +574,13 @@ class TestCompetition:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 0
+        mock_space.sample_position_for_seller.return_value = Mock()
+        mock_space.num_cells = 0
 
         mock_sample_clip.return_value = 1.0
 
         # Test spawning sellers when no free cells are available
-        with pytest.raises(ValueError, match="No free cells available to spawn sellers\\."):
+        with pytest.raises(ValueError, match="Number of agents exceeds the number of cells in the space."):
             Competition(**competition_params)
 
         # Verify no sellers were added
@@ -603,7 +603,7 @@ class TestCompetition:
         mock_space_class.return_value = mock_space
         mock_position = Mock()
         mock_space.sample_free_position.return_value = mock_position
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.sellers = []
         mock_space.buyers = []
 
@@ -635,8 +635,9 @@ class TestCompetition:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10  # Initially allow seller spawning
+        mock_space.sample_position_for_buyer.return_value = Mock()
+        mock_space.num_cells = 10  # Initially allow seller spawning
+        mock_space.buyers = []
 
         mock_sample_clip.return_value = 1.0
 
@@ -644,7 +645,7 @@ class TestCompetition:
         competition = Competition(**competition_params)
 
         # Now set no free cells for buyer spawning test
-        mock_space.num_free_cells = 0
+        mock_space.num_cells = 0
         mock_space.add_buyer.reset_mock()
 
         # Test spawning new buyers when no space available
@@ -662,8 +663,8 @@ class TestCompetition:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 100
+        mock_space.sample_position_for_buyer.return_value = Mock()
+        mock_space.num_cells = 100
 
         mock_sample_clip.return_value = 1.0
 
@@ -694,8 +695,8 @@ class TestCompetition:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.sample_position_for_buyer.return_value = Mock()
+        mock_space.num_cells = 10
 
         mock_seller1 = Mock()
         mock_seller2 = Mock()
@@ -739,8 +740,8 @@ class TestCompetition:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.sample_position_for_buyer.return_value = Mock()
+        mock_space.num_cells = 10
 
         mock_buyer1 = Mock()
         mock_buyer2 = Mock()
@@ -777,7 +778,7 @@ class TestCompetition:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_seller = Mock()
@@ -877,7 +878,7 @@ class TestCollisionResolution:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_sample_clip.return_value = 1.0
@@ -919,7 +920,7 @@ class TestCollisionResolution:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_sample_clip.return_value = 1.0
@@ -965,7 +966,7 @@ class TestCollisionResolution:
         mock_space = Mock()
         mock_space_class.return_value = mock_space
         mock_space.sample_free_position.return_value = Mock()
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         mock_sample_clip.return_value = 1.0
@@ -1006,7 +1007,7 @@ class TestCollisionResolution:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         # Create real Position objects for sellers
@@ -1066,7 +1067,7 @@ class TestCollisionResolution:
         # Setup mocks
         mock_space = Mock()
         mock_space_class.return_value = mock_space
-        mock_space.num_free_cells = 10
+        mock_space.num_cells = 10
         mock_space.space_resolution = 10
 
         position_0 = Position(

@@ -137,22 +137,13 @@ class Observation:
         local_view_shape = view_scope.seller_view_shape(space_resolution, dimensions)
 
         space_dict: dict[str, spaces.Space] = {
-            "own_position": spaces.Box(low=0, high=1, shape=(dimensions,), dtype=np.float32),
-            "own_price": spaces.Box(low=0.0, high=max_price, dtype=np.float32),
-            "own_quality": spaces.Box(low=0.0, high=max_quality, dtype=np.float32),
-            # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
-            "local_view": spaces.Box(low=0, high=3, shape=local_view_shape, dtype=np.int8),
+            "own_position": spaces.Box(low=0, high=1, shape=(dimensions,), dtype=np.float16),
+            "own_price": spaces.Box(low=0.0, high=max_price, dtype=np.float16),
+            "own_quality": spaces.Box(low=0.0, high=max_quality, dtype=np.float16),
+            # One-hot encoding: (channels, *spatial_dims)
+            # Channel 0: self, Channel 1: other seller, Channel 2: buyer
+            "local_view": spaces.MultiBinary(n=(3,) + local_view_shape),
         }
-
-        # Add buyers space for LIMITED and COMPLETE information levels
-        if information_level in (InformationLevel.LIMITED, InformationLevel.COMPLETE):
-            space_dict["buyers"] = Observation.create_buyers_space(
-                view_scope=view_scope,
-                space_resolution=space_resolution,
-                dimensions=dimensions,
-                max_price=max_price,
-                max_quality=max_quality,
-            )
 
         # Add sellers spaces for COMPLETE information level
         if information_level == InformationLevel.COMPLETE:
@@ -170,24 +161,30 @@ class Observation:
 
     @classmethod
     def _build_local_view_observation(cls, agent_id: str, seller_subspace: CompetitionSpace) -> np.ndarray:
-        # n dimensional array of zeros, where each dimension is the size of the subspace
-        local_view = np.zeros(seller_subspace.relative_extent.tensor_coordinates + 1, dtype=np.int8)
+        # One-hot encoded local view with shape (channels, *spatial_dims)
+        # Channel 0: self, Channel 1: other seller, Channel 2: buyer
+        spatial_shape = tuple(seller_subspace.relative_extent.tensor_coordinates + 1)
+        local_view = np.zeros((3,) + spatial_shape, dtype=np.uint8)
 
         for seller in seller_subspace.sellers_dict.values():
             index = tuple(seller_subspace.relative_position(seller.position).tensor_coordinates)
             if seller.agent_id != agent_id:
-                local_view[index] = 2
+                # Channel 1: other seller
+                local_view[(1,) + index] = 1
             else:
-                local_view[index] = 1
+                # Channel 0: self
+                local_view[(0,) + index] = 1
+
         for buyer in seller_subspace.buyers:
             index = tuple(seller_subspace.relative_position(buyer.position).tensor_coordinates)
-            local_view[index] = 3
+            # Channel 2: buyer (can coexist with sellers)
+            local_view[(2,) + index] = 1
 
         return local_view
 
     @classmethod
     def _build_buyers_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:
-        buyers = np.full(space.relative_extent.tensor_coordinates + 1, cls.NO_BUYER_PLACEHOLDER, dtype=np.float32)
+        buyers = np.full(space.relative_extent.tensor_coordinates + 1, cls.NO_BUYER_PLACEHOLDER, dtype=np.float16)
         seller = space.sellers_dict[agent_id]
 
         for buyer in space.buyers:
@@ -199,7 +196,7 @@ class Observation:
     @classmethod
     def _build_sellers_price_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:
         sellers_price = np.full(
-            space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float32
+            space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_PRICE_PLACEHOLDER, dtype=np.float16
         )
 
         for seller in space.sellers_dict.values():
@@ -213,7 +210,7 @@ class Observation:
     @classmethod
     def _build_sellers_quality_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:
         sellers_quality = np.full(
-            space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float32
+            space.relative_extent.tensor_coordinates + 1, cls.NO_SELLER_QUALITY_PLACEHOLDER, dtype=np.float16
         )
 
         for seller in space.sellers_dict.values():

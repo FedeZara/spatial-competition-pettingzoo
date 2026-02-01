@@ -250,12 +250,12 @@ class Competition:
         seller_quality_distr: DistributionProtocol | None,
     ) -> None:
         """Spawn sellers."""
-        for agent_id in agent_ids:
-            if self.space.num_free_cells == 0:
-                error_msg = "No free cells available to spawn sellers."
-                raise ValueError(error_msg)
+        if len(agent_ids) > self.space.num_cells:
+            error_msg = "Number of agents exceeds the number of cells in the space."
+            raise ValueError(error_msg)
 
-            position = self.space.sample_free_position(seller_position_distr, self.rng)
+        for agent_id in agent_ids:
+            position = self.space.sample_position_for_seller(seller_position_distr, self.rng)
             price = sample_and_clip_univariate_distribution(
                 "price", seller_price_distr, self.rng, min_value=0.0, max_value=self.max_price
             )
@@ -270,13 +270,10 @@ class Competition:
     def _spawn_new_buyers(self) -> None:
         """Spawn new buyers."""
         for _ in range(self.new_buyers_per_step):
-            if self.space.num_free_cells == 0:
+            if len(self.space.buyers) >= self.space.num_cells or len(self.space.buyers) >= self.max_buyers:
                 break
 
-            if len(self.space.buyers) >= self.max_buyers:
-                break
-
-            position = self.space.sample_free_position(self.buyer_position_distr, self.rng)
+            position = self.space.sample_position_for_buyer(self.buyer_position_distr, self.rng)
             distance_factor = sample_and_clip_univariate_distribution(
                 "distance_factor", self.buyer_distance_factor_distr, self.rng
             )

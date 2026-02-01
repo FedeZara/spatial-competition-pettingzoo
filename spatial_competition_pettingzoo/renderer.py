@@ -535,17 +535,7 @@ class PygameRenderer:
             y = offset_y + (draw_size * i) // num_grid_lines
             pygame.draw.line(self._screen, (60, 60, 75), (offset_x, y), (offset_x + draw_size, y), 1)
 
-        # Draw buyers as small dots, colored by preferred seller
-        buyer_radius = 3
-        for buyer in self._competition.space.buyers:
-            coords = buyer.position.space_coordinates
-            screen_x = int(offset_x + coords[0] * draw_size)
-            screen_y = int(offset_y + (1 - coords[1]) * draw_size)  # Flip Y for screen coords
-            buyer_color = self._get_buyer_color(buyer)
-            pygame.draw.circle(self._screen, buyer_color, (screen_x, screen_y), buyer_radius)
-            self._buyer_positions.append((screen_x, screen_y, buyer_radius, buyer))
-
-        # Draw sellers as larger circles with labels
+        # Draw sellers first (as larger circles with labels)
         seller_radius = 10
         for idx, seller in enumerate(self._competition.space.sellers):
             coords = seller.position.space_coordinates
@@ -566,6 +556,17 @@ class PygameRenderer:
                 info_text += f" q={seller.quality:.1f}"
             price_label = self._font.render(info_text, True, (200, 200, 200))
             self._screen.blit(price_label, (screen_x + 15, screen_y - 10))
+
+        # Draw buyers on top (as small dots, colored by preferred seller)
+        # Buyers are drawn after sellers so they appear on top when at the same position
+        buyer_radius = 3
+        for buyer in self._competition.space.buyers:
+            coords = buyer.position.space_coordinates
+            screen_x = int(offset_x + coords[0] * draw_size)
+            screen_y = int(offset_y + (1 - coords[1]) * draw_size)  # Flip Y for screen coords
+            buyer_color = self._get_buyer_color(buyer)
+            pygame.draw.circle(self._screen, buyer_color, (screen_x, screen_y), buyer_radius)
+            self._buyer_positions.append((screen_x, screen_y, buyer_radius, buyer))
 
     def _render_high_dim(self, width: int, height: int, margin: int, dimensions: int) -> None:
         """Render high-dimensional environment (>2D) with stats display."""
