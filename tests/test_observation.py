@@ -173,7 +173,7 @@ class TestObservation:
         assert isinstance(obs_space.spaces["own_position"], spaces.Box)
         assert isinstance(obs_space.spaces["own_price"], spaces.Box)
         assert isinstance(obs_space.spaces["own_quality"], spaces.Box)
-        assert isinstance(obs_space.spaces["local_view"], spaces.Box)
+        assert isinstance(obs_space.spaces["local_view"], spaces.MultiBinary)
         assert obs_space.spaces["own_position"].shape == (2,)
         assert obs_space.spaces["own_price"].high.item() == 10.0
         assert obs_space.spaces["own_quality"].high.item() == 1.0

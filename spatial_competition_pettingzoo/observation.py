@@ -145,6 +145,16 @@ class Observation:
             "local_view": spaces.MultiBinary(n=(3,) + local_view_shape),
         }
 
+        # Add buyers space for LIMITED and COMPLETE information levels
+        if information_level in (InformationLevel.LIMITED, InformationLevel.COMPLETE):
+            space_dict["buyers"] = Observation.create_buyers_space(
+                view_scope=view_scope,
+                space_resolution=space_resolution,
+                dimensions=dimensions,
+                max_price=max_price,
+                max_quality=max_quality,
+            )
+
         # Add sellers spaces for COMPLETE information level
         if information_level == InformationLevel.COMPLETE:
             sellers_price_space, sellers_quality_space = Observation.create_sellers_spaces(
