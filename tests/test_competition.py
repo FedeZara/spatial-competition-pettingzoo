@@ -10,7 +10,7 @@ import pytest
 
 from spatial_competition_pettingzoo.action import Action
 from spatial_competition_pettingzoo.competition import Competition
-from spatial_competition_pettingzoo.enums import InformationLevel
+from spatial_competition_pettingzoo.enums import InformationLevel, TransportationCostNorm
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.topology import Topology
 
@@ -62,6 +62,7 @@ class TestCompetition:
             "max_quality": 5.0,
             "max_step_size": 1.0,
             "production_cost_factor": 0.5,
+            "transportation_cost_norm": TransportationCostNorm.L2,
             "movement_cost": 0.1,
             "include_quality": True,
             "include_buyer_valuation": True,
@@ -850,6 +851,7 @@ class TestCollisionResolution:
             "max_quality": 5.0,
             "max_step_size": 1.0,
             "production_cost_factor": 0.5,
+            "transportation_cost_norm": TransportationCostNorm.L2,
             "movement_cost": 0.1,
             "include_quality": True,
             "include_buyer_valuation": True,

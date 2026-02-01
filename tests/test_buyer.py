@@ -88,7 +88,7 @@ class TestBuyer:
         ):
             result = buyer.value_for_seller(seller)
             assert abs(result - expected_value) < 1e-6
-            mock_distance.assert_called_once_with(seller.position)
+            mock_distance.assert_called_once_with(seller.position, ord=2)
 
     @pytest.mark.parametrize(
         ("value_for_seller", "price", "expected_reward"),
