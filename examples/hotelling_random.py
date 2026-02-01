@@ -24,6 +24,7 @@ from spatial_competition_pettingzoo.distributions import (
     ConstantUnivariateDistribution,
     MultivariateUniformDistribution,
 )
+from spatial_competition_pettingzoo.enums import TransportationCostNorm
 from spatial_competition_pettingzoo.environment import env
 from spatial_competition_pettingzoo.topology import Topology
 
@@ -113,6 +114,7 @@ Close the window to stop.
         max_step_size=max_step_size,
         production_cost_factor=0.1,  # Cost of quality: gamma * q^2
         movement_cost=0.0,
+        transportation_cost_norm=TransportationCostNorm.L1,
         seller_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
         seller_price_distr=ConstantUnivariateDistribution(max_price / 2),
         seller_quality_distr=ConstantUnivariateDistribution(max_quality / 2),

@@ -9,6 +9,7 @@ import numpy as np
 from spatial_competition_pettingzoo.action import Action
 from spatial_competition_pettingzoo.buyer import Buyer
 from spatial_competition_pettingzoo.competition_space import CompetitionSpace
+from spatial_competition_pettingzoo.enums import TransportationCostNorm
 from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
@@ -39,6 +40,7 @@ class Competition:
         max_step_size: float,
         production_cost_factor: float,
         movement_cost: float,
+        transportation_cost_norm: TransportationCostNorm,
         seller_position_distr: MultivariateDistributionProtocol,
         seller_price_distr: DistributionProtocol,
         seller_quality_distr: DistributionProtocol | None,
@@ -68,6 +70,7 @@ class Competition:
 
         self.production_cost_factor = production_cost_factor
         self.movement_cost = movement_cost
+        self.transportation_cost_norm = transportation_cost_norm
         self.max_step_size = max_step_size
 
         # Buyer generation parameters
@@ -294,5 +297,6 @@ class Competition:
                     value=value,
                     quality_taste=quality_taste,
                     distance_factor=distance_factor,
+                    transportation_cost_norm=self.transportation_cost_norm,
                 )
             )

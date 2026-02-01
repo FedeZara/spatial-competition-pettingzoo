@@ -20,7 +20,7 @@ from spatial_competition_pettingzoo.distributions import (
     ConstantUnivariateDistribution,
     MultivariateUniformDistribution,
 )
-from spatial_competition_pettingzoo.enums import InformationLevel
+from spatial_competition_pettingzoo.enums import InformationLevel, TransportationCostNorm
 from spatial_competition_pettingzoo.observation import Observation
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.renderer import PygameRenderer
@@ -53,6 +53,7 @@ def env(
     max_quality: float = 5.0,
     production_cost_factor: float = 0.5,
     movement_cost: float = 0.1,
+    transportation_cost_norm: TransportationCostNorm = TransportationCostNorm.L2,
     seller_position_distr: MultivariateDistributionProtocol | None = None,
     seller_price_distr: DistributionProtocol | None = None,
     seller_quality_distr: DistributionProtocol | None = None,
@@ -82,6 +83,7 @@ def env(
         max_quality=max_quality,
         production_cost_factor=production_cost_factor,
         movement_cost=movement_cost,
+        transportation_cost_norm=transportation_cost_norm,
         seller_position_distr=seller_position_distr,
         seller_price_distr=seller_price_distr,
         seller_quality_distr=seller_quality_distr,
@@ -113,6 +115,7 @@ def raw_env(
     max_quality: float = 5.0,
     production_cost_factor: float = 0.5,
     movement_cost: float = 0.1,
+    transportation_cost_norm: TransportationCostNorm = TransportationCostNorm.L2,
     seller_position_distr: MultivariateDistributionProtocol | None = None,
     seller_price_distr: DistributionProtocol | None = None,
     seller_quality_distr: DistributionProtocol | None = None,
@@ -142,6 +145,7 @@ def raw_env(
         max_quality=max_quality,
         production_cost_factor=production_cost_factor,
         movement_cost=movement_cost,
+        transportation_cost_norm=transportation_cost_norm,
         seller_position_distr=seller_position_distr,
         seller_price_distr=seller_price_distr,
         seller_quality_distr=seller_quality_distr,
@@ -188,6 +192,7 @@ class SpatialCompetitionEnv(ParallelEnv):
         max_quality: float = 5.0,
         production_cost_factor: float = 0.5,
         movement_cost: float = 0.1,
+        transportation_cost_norm: TransportationCostNorm = TransportationCostNorm.L2,
         seller_position_distr: MultivariateDistributionProtocol | None = None,
         seller_price_distr: DistributionProtocol | None = None,
         seller_quality_distr: DistributionProtocol | None = None,
@@ -220,6 +225,8 @@ class SpatialCompetitionEnv(ParallelEnv):
             max_step_size: Maximum movement distance per step
             production_cost_factor: Production cost parameter (gamma, C(q) = gamma*q^2)
             movement_cost: Cost of moving per unit distance (m)
+            transportation_cost_norm: Distance norm for transportation costs
+                (L1=Manhattan, L2=Euclidean, L3/L4=Minkowski, L_INF=Chebyshev)
             seller_position_distr: Multivariate distribution for seller positions.
                 Defaults to multivariate uniform distribution in the unit hypercube.
             seller_price_distr: Distribution for seller prices.
@@ -256,6 +263,7 @@ class SpatialCompetitionEnv(ParallelEnv):
         self.max_quality = max_quality
         self.production_cost_factor = production_cost_factor
         self.movement_cost = movement_cost
+        self.transportation_cost_norm = transportation_cost_norm
         self.new_buyers_per_step = new_buyers_per_step
         self.max_buyers = max_buyers
 
@@ -397,6 +405,7 @@ class SpatialCompetitionEnv(ParallelEnv):
             max_step_size=self.max_step_size,
             production_cost_factor=self.production_cost_factor,
             movement_cost=self.movement_cost,
+            transportation_cost_norm=self.transportation_cost_norm,
             include_quality=self.include_quality,
             include_buyer_valuation=self.include_buyer_valuation,
             seller_position_distr=self.seller_position_distr,

@@ -1,5 +1,6 @@
 import random
 
+from spatial_competition_pettingzoo.enums import TransportationCostNorm
 from spatial_competition_pettingzoo.position import Position
 from spatial_competition_pettingzoo.seller import Seller
 
@@ -11,11 +12,13 @@ class Buyer:
         value: float | None,
         quality_taste: float | None,
         distance_factor: float,
+        transportation_cost_norm: TransportationCostNorm = TransportationCostNorm.L2,
     ) -> None:
         self.position = position
         self.value = value
         self.quality_taste = quality_taste
         self.distance_factor = distance_factor
+        self.transportation_cost_norm = transportation_cost_norm
         self.purchased_from_id: str | None = None
 
     @property
@@ -28,10 +31,13 @@ class Buyer:
         Calculate the value for a seller.
 
         Formula is value - distance_factor * distance + quality_taste * quality
+        The distance is calculated using the transportation cost type's norm.
         """
         value = self.value if self.value is not None else 0
 
-        distance_term = self.distance_factor * self.position.distance(seller.position)
+        distance_term = self.distance_factor * self.position.distance(
+            seller.position, ord=self.transportation_cost_norm.order
+        )
 
         quality_term = 0.0
         if self.quality_taste is not None:

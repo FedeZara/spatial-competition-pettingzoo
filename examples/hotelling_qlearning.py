@@ -30,6 +30,7 @@ from spatial_competition_pettingzoo.distributions import (
     ConstantUnivariateDistribution,
     MultivariateUniformDistribution,
 )
+from spatial_competition_pettingzoo.enums import TransportationCostNorm
 from spatial_competition_pettingzoo.environment import env
 from spatial_competition_pettingzoo.topology import Topology
 
@@ -285,6 +286,7 @@ def run_qlearning_simulation(
         max_step_size=step_size,
         production_cost_factor=0.0,
         movement_cost=0.0,
+        transportation_cost_norm=TransportationCostNorm.L1,
         seller_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
         seller_price_distr=ConstantUnivariateDistribution(max_price / 2),
         seller_quality_distr=ConstantUnivariateDistribution(0.0),
@@ -334,6 +336,7 @@ def run_qlearning_simulation(
             max_step_size=step_size,
             production_cost_factor=0.0,
             movement_cost=0.0,
+            transportation_cost_norm=TransportationCostNorm.L1,
             seller_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
             seller_price_distr=ConstantUnivariateDistribution(max_price / 2),
             seller_quality_distr=ConstantUnivariateDistribution(0.0),
@@ -475,6 +478,7 @@ def evaluate_agents(
             max_step_size=step_size,
             production_cost_factor=0.0,
             movement_cost=0.0,
+            transportation_cost_norm=TransportationCostNorm.L1,
             seller_position_distr=MultivariateUniformDistribution(dim=1, loc=0.0, scale=1.0),
             seller_price_distr=ConstantUnivariateDistribution(max_price / 2),
             seller_quality_distr=ConstantUnivariateDistribution(0.0),

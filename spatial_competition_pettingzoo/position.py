@@ -176,20 +176,32 @@ class Position:
     def __hash__(self) -> int:
         return hash((tuple(self.tensor_coordinates), self.space_resolution, self.topology))
 
-    def distance(self, other: Position) -> float:
+    def distance(self, other: Position, ord: float = 2) -> float:
+        """
+        Calculate distance to another position using the specified norm.
+
+        Args:
+            other: The other position to calculate distance to.
+            ord: The order of the norm (1 for L1/Manhattan, 2 for L2/Euclidean,
+                 inf for L-infinity/Chebyshev, etc.). Defaults to 2 (Euclidean).
+
+        Returns:
+            The distance between the two positions using the specified norm.
+        """
         assert self.dimensions == other.dimensions
         assert self.topology == other.topology
         assert self.space_resolution == other.space_resolution
 
         match self._topology:
             case Topology.RECTANGLE:
-                return float(np.linalg.norm(self.space_coordinates - other.space_coordinates))
+                return float(np.linalg.norm(self.space_coordinates - other.space_coordinates, ord=ord))
             case Topology.TORUS:
                 return float(
                     np.linalg.norm(
                         np.minimum(
                             np.abs(self.space_coordinates - other.space_coordinates),
                             1 - np.abs(self.space_coordinates - other.space_coordinates),
-                        )
+                        ),
+                        ord=ord,
                     )
                 )
