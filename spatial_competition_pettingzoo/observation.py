@@ -86,13 +86,21 @@ class Observation:
         max_price: float,
         max_quality: float,
     ) -> spaces.Box:
-        """Create observation space for buyers information."""
+        """Create observation space for buyers information.
+
+        The buyers observation is a 3-channel grid:
+            Channel 0: inner valuation (buyer_values)
+            Channel 1: distance factor (buyer_distance_factors)
+            Channel 2: quality taste  (buyer_quality_tastes)
+
+        Empty cells use ``NO_BUYER_PLACEHOLDER``.
+        """
         local_view_shape = view_scope.seller_view_shape(space_resolution, dimensions)
 
         return spaces.Box(
             low=Observation.NO_BUYER_PLACEHOLDER,
-            high=max_price + max_quality,  # max_price + max_quality is the maximum possible value for a buyer
-            shape=local_view_shape,
+            high=max(max_price * 2, max_quality, 100.0),  # generous upper bound
+            shape=(3,) + local_view_shape,
             dtype=np.float32,
         )
 
@@ -193,13 +201,24 @@ class Observation:
         return local_view
 
     @classmethod
-    def _build_buyers_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:
-        buyers = np.full(space.relative_extent.tensor_coordinates + 1, cls.NO_BUYER_PLACEHOLDER, dtype=np.float16)
-        seller = space.sellers_dict[agent_id]
+    def _build_buyers_observation(cls, agent_id: str, space: CompetitionSpace) -> np.ndarray:  # noqa: ARG003
+        """Build 3-channel buyer attribute grid.
+
+        Channels:
+            0 – inner valuation  (``buyer.value``, 0 when valuations disabled)
+            1 – distance factor  (``buyer.distance_factor``)
+            2 – quality taste    (``buyer.quality_taste``, 0 when quality disabled)
+
+        Empty cells are filled with ``NO_BUYER_PLACEHOLDER``.
+        """
+        spatial_shape = tuple(space.relative_extent.tensor_coordinates + 1)
+        buyers = np.full((3,) + spatial_shape, cls.NO_BUYER_PLACEHOLDER, dtype=np.float32)
 
         for buyer in space.buyers:
             index = tuple(space.relative_position(buyer.position).tensor_coordinates)
-            buyers[index] = buyer.value_for_seller(seller)
+            buyers[(0,) + index] = buyer.value if buyer.value is not None else 0.0
+            buyers[(1,) + index] = buyer.distance_factor
+            buyers[(2,) + index] = buyer.quality_taste if buyer.quality_taste is not None else 0.0
 
         return buyers
 

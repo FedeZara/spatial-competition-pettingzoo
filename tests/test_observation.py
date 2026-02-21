@@ -33,7 +33,7 @@ class TestObservation:
         """Create sample arrays for observation components."""
         return {
             "local_view": np.array([[0, 1], [2, 3]], dtype=np.int8),
-            "buyers": np.array([[10.5, 15.2], [8.7, 12.3]], dtype=np.float16),
+            "buyers": np.zeros((3, 2, 2), dtype=np.float32),
             "sellers_price": np.array([[5.0, 7.5], [6.2, 9.1]], dtype=np.float16),
             "sellers_quality": np.array([[0.8, 0.9], [0.7, 0.85]], dtype=np.float16),
         }
@@ -121,8 +121,7 @@ class TestObservation:
 
         assert isinstance(buyers_space, spaces.Box)
         assert np.all(buyers_space.low == Observation.NO_BUYER_PLACEHOLDER)
-        assert np.all(buyers_space.high == 21.0)  # max_price + max_quality
-        assert buyers_space.shape == (11, 11)  # (2 * 5 + 1) for each dimension
+        assert buyers_space.shape == (3, 11, 11)  # (3 channels, 2 * 5 + 1, 2 * 5 + 1)
         assert buyers_space.dtype == np.float32
 
     def test_create_sellers_spaces(self) -> None:
@@ -255,19 +254,38 @@ class TestObservation:
         assert np.array_equal(local_view, expected)
 
     def test_buyers_observation(self, sample_competition_space: CompetitionSpace) -> None:
-        """Test buyers observation."""
-        with patch("spatial_competition_pettingzoo.buyer.Buyer.value_for_seller", return_value=15.0):
+        """Test buyers observation returns 3-channel grid of buyer attributes."""
             observation = Observation.build_from_competition_space(
                 sample_competition_space, InformationLevel.COMPLETE, LimitedViewScope(2), "seller_1"
             )
 
-        # 0 = empty, 1 = self, 2 = other seller, 3 = buyer
-        expected = np.full(shape=(5, 5), fill_value=Observation.NO_BUYER_PLACEHOLDER, dtype=np.float16)
-        expected[0, 3] = 15.0
-        expected[3, 3] = 15.0
+        # Buyers in the fixture (torus, resolution 10):
+        #   buyer1 @ (2,3), seller_1 @ (1,2), radius 2 → relative (3,3): value=15.0, df=0.3, qt=0.7
+        #   buyer2 @ (9,3), seller_1 @ (1,2), radius 2 → relative (0,3): value=12.0, df=0.2, qt=0.8
+        #   (on a torus, dist(1,9)=2 so buyer2 is just within view)
 
         buyers_obs = observation.get_observation()["buyers"]
-        assert np.array_equal(buyers_obs, expected)
+        assert buyers_obs.shape == (3, 5, 5)
+
+        placeholder = Observation.NO_BUYER_PLACEHOLDER
+
+        # Channel 0: inner valuation
+        expected_val = np.full((5, 5), placeholder, dtype=np.float32)
+        expected_val[3, 3] = 15.0  # buyer1
+        expected_val[0, 3] = 12.0  # buyer2
+        np.testing.assert_array_almost_equal(buyers_obs[0], expected_val, decimal=2)
+
+        # Channel 1: distance factor
+        expected_df = np.full((5, 5), placeholder, dtype=np.float32)
+        expected_df[3, 3] = 0.3  # buyer1
+        expected_df[0, 3] = 0.2  # buyer2
+        np.testing.assert_array_almost_equal(buyers_obs[1], expected_df, decimal=2)
+
+        # Channel 2: quality taste
+        expected_qt = np.full((5, 5), placeholder, dtype=np.float32)
+        expected_qt[3, 3] = 0.7  # buyer1
+        expected_qt[0, 3] = 0.8  # buyer2
+        np.testing.assert_array_almost_equal(buyers_obs[2], expected_qt, decimal=2)
 
     def test_sellers_price_observation(self, sample_competition_space: CompetitionSpace) -> None:
         """Test sellers price observation."""
@@ -327,7 +345,7 @@ class TestObservation:
     def test_limited_observation_dict_keys_match_space_keys(self, sample_position: Position) -> None:
         """Test that observation dictionary keys match the observation space keys for LIMITED information level."""
         local_view = np.array([[0, 1]], dtype=np.int8)
-        buyers = np.array([[10.5]], dtype=np.float16)
+        buyers = np.zeros((3, 1, 2), dtype=np.float32)
 
         observation = Observation(
             own_price=5.0,
